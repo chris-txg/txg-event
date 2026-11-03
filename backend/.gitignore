@@ -1,0 +1,42 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyd
+__pycache__
+*.log
+*.pot
+*.pyc
+__pycache__
+
+pip-log.txt 
+pip-delete-this-directory.txt 
+
+migrations/*.py
+*/migrations/*.py
+*/*/migrations/*.py
+
+!migrations/__init__.py
+!*/migrations/__init__.py
+!*/*/migrations/__init__.py
+
+# Virtual environments
+venv/
+.venv/
+
+# Environment variables and local secrets
+.env
+.env.*
+!.env.example
+
+# Django
+*.sqlite3
+staticfiles/
+media/
+
+# Editor and operating-system files
+.vscode/
+.agent/rules
+.agent/
+.idea/
+.DS_Store
+Thumbs.db
