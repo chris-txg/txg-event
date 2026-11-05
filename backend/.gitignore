@@ -40,3 +40,6 @@ media/
 .idea/
 .DS_Store
 Thumbs.db
+
+celerybeat-schedule
+celerybeat-schedule.*

@@ -1,0 +1,187 @@
+services:
+  # PostgreSQL Database Service
+  postgres:
+    image: postgres:16-alpine
+    container_name: event_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-txg-event}
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-txg-event}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - event_network
+
+  # Redis Cache & Message Broker Service
+  redis:
+    image: redis:7-alpine
+    container_name: event_redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - event_network
+
+  # Web-Based Database Viewer (Adminer)
+  adminer:
+    image: adminer:latest
+    container_name: event_adminer
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    environment:
+      ADMINER_DEFAULT_SERVER: postgres
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - event_network
+
+  # Django REST Framework Backend API
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: event_backend
+    restart: unless-stopped
+    tty: true
+    stdin_open: true
+    command: python manage.py runserver 0.0.0.0:8000 --force-color
+    volumes:
+      - ./backend/src:/app
+    ports:
+      - "8000:8000"
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-txg-event}
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: 5432
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      REDIS_URL: redis://redis:6379/0
+      CELERY_BROKER_URL: redis://redis:6379/1
+      CELERY_RESULT_BACKEND: redis://redis:6379/2
+      DJANGO_SECRET_KEY: ${DJANGO_SECRET_KEY:-django-insecure-prod-key-for-local-docker}
+      DJANGO_DEBUG: ${DJANGO_DEBUG:-True}
+      DJANGO_ALLOWED_HOSTS: ${DJANGO_ALLOWED_HOSTS:-*}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - event_network
+
+  # Celery Asynchronous Task Worker
+  celery_worker:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: event_celery_worker
+    restart: unless-stopped
+    tty: true
+    stdin_open: true
+    command: celery -A core worker -l info
+    volumes:
+      - ./backend/src:/app
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-txg-event}
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: 5432
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      REDIS_URL: redis://redis:6379/0
+      CELERY_BROKER_URL: redis://redis:6379/1
+      CELERY_RESULT_BACKEND: redis://redis:6379/2
+      DJANGO_SECRET_KEY: ${DJANGO_SECRET_KEY:-django-insecure-prod-key-for-local-docker}
+      DJANGO_DEBUG: ${DJANGO_DEBUG:-True}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - event_network
+
+  # Celery Beat Scheduled Task Runner
+  celery_beat:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: event_celery_beat
+    restart: unless-stopped
+    tty: true
+    stdin_open: true
+    command: celery -A core beat -l info
+    volumes:
+      - ./backend/src:/app
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-txg-event}
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: 5432
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      REDIS_URL: redis://redis:6379/0
+      CELERY_BROKER_URL: redis://redis:6379/1
+      CELERY_RESULT_BACKEND: redis://redis:6379/2
+      DJANGO_SECRET_KEY: ${DJANGO_SECRET_KEY:-django-insecure-prod-key-for-local-docker}
+      DJANGO_DEBUG: ${DJANGO_DEBUG:-True}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - event_network
+
+  # Next.js Frontend Application
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: event_frontend
+    restart: unless-stopped
+    tty: true
+    stdin_open: true
+    command: npm run dev
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+      - /app/.next
+    ports:
+      - "3000:3000"
+    environment:
+      NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:8000}
+    depends_on:
+      - backend
+    networks:
+      - event_network
+
+volumes:
+  postgres_data:
+  redis_data:
+
+networks:
+  event_network:
+    driver: bridge
+

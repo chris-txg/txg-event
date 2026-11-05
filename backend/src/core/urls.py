@@ -22,7 +22,15 @@ from django.conf.urls.static import static
 from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
 
 urlpatterns = [
+    path("admin/dj-control-room-base/", include("dj_control_room_base.urls")),  # for base
+    path("admin/dj-redis-panel/", include("dj_redis_panel.urls")),  # for redis panel
+    path("admin/dj-celery-panel/", include("dj_celery_panel.urls")),  # for celery panel
+    path("admin/dj-control-room/", include("dj_control_room.urls")),  # for the control room
+    path("admin/dj_cache_panel/", include("dj_cache_panel.urls")),
+    path("admin/dj_urls_panel/", include("dj_urls_panel.urls")),
+    path("admin/dj_signals_panel/", include("dj_signals_panel.urls")),
     path('admin/', admin.site.urls),
+    path("__reload__/", include("django_browser_reload.urls")),
     path('', include('accounts.urls')),
 ]
 
