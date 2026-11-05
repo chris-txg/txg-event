@@ -201,6 +201,8 @@ class AuditAction(models.TextChoices):
     LOGIN_FAILED = 'LOGIN_FAILED', 'Login Failed'
     LOGOUT = 'LOGOUT', 'Logout'
     REGISTER = 'REGISTER', 'Register'
+    EMAIL_VERIFICATION_SENT = 'EMAIL_VERIFICATION_SENT', 'Email Verification Sent'
+    EMAIL_VERIFIED = 'EMAIL_VERIFIED', 'Email Verified'
     PASSWORD_CHANGE = 'PASSWORD_CHANGE', 'Password Change'
     PASSWORD_RESET_REQUEST = 'PASSWORD_RESET_REQUEST', 'Password Reset Request'
     PASSWORD_RESET_CONFIRM = 'PASSWORD_RESET_CONFIRM', 'Password Reset Confirm'

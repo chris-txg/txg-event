@@ -18,9 +18,11 @@ from accounts.serializers import (
     PasswordResetConfirmSerializer,
     PasswordResetRequestSerializer,
     RegisterSerializer,
+    ResendVerificationEmailSerializer,
     UserProfileSerializer,
     UserSummarySerializer,
     VendorProfileSerializer,
+    VerifyEmailSerializer,
 )
 from accounts.services import AuthService, record_audit_log
 
@@ -260,6 +262,88 @@ class PasswordResetConfirmView(APIView):
             return Response(exc.message_dict if hasattr(exc, "message_dict") else list(exc.messages), status=status.HTTP_400_BAD_REQUEST)
 
         return Response({"message": "Password has been successfully reset. You can now login."}, status=status.HTTP_200_OK)
+
+
+class VerifyEmailView(APIView):
+    permission_classes = [AllowAny]
+
+    @extend_schema(
+        tags=["Authentication"],
+        summary="Verify email address with token (POST)",
+        request=VerifyEmailSerializer,
+        responses={
+            status.HTTP_200_OK: OpenApiResponse(description="Email verified successfully."),
+            status.HTTP_400_BAD_REQUEST: OpenApiResponse(description="Invalid or expired verification token."),
+        },
+    )
+    def post(self, request: Request, *args: Any, **kwargs: Any) -> Response:
+        serializer = VerifyEmailSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        try:
+            AuthService.verify_email(
+                uidb64=serializer.validated_data["uid"],
+                token=serializer.validated_data["token"],
+                request=request,
+            )
+        except DjangoValidationError as exc:
+            return Response(
+                exc.message_dict if hasattr(exc, "message_dict") else list(exc.messages),
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        return Response({"message": "Email address verified successfully. Your account is fully active."}, status=status.HTTP_200_OK)
+
+    @extend_schema(
+        tags=["Authentication"],
+        summary="Verify email address with token via link (GET)",
+        responses={
+            status.HTTP_200_OK: OpenApiResponse(description="Email verified successfully."),
+            status.HTTP_400_BAD_REQUEST: OpenApiResponse(description="Invalid or expired verification token."),
+        },
+    )
+    def get(self, request: Request, *args: Any, **kwargs: Any) -> Response:
+        uid = request.query_params.get("uid")
+        token = request.query_params.get("token")
+
+        if not uid or not token:
+            return Response({"detail": "Missing uid or token query parameters."}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            AuthService.verify_email(uidb64=uid, token=token, request=request)
+        except DjangoValidationError as exc:
+            return Response(
+                exc.message_dict if hasattr(exc, "message_dict") else list(exc.messages),
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        return Response({"message": "Email address verified successfully. Your account is fully active."}, status=status.HTTP_200_OK)
+
+
+class ResendVerificationEmailView(APIView):
+    permission_classes = [AllowAny]
+
+    @extend_schema(
+        tags=["Authentication"],
+        summary="Resend email verification link",
+        request=ResendVerificationEmailSerializer,
+        responses={
+            status.HTTP_200_OK: OpenApiResponse(description="Verification email dispatched if unverified."),
+        },
+    )
+    def post(self, request: Request, *args: Any, **kwargs: Any) -> Response:
+        serializer = ResendVerificationEmailSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        AuthService.resend_verification_email(
+            email=serializer.validated_data["email"],
+            request=request,
+        )
+
+        return Response(
+            {"message": "If an unverified account with this email exists, a new verification link has been sent."},
+            status=status.HTTP_200_OK,
+        )
 
 
 class AuditLogListView(generics.ListAPIView):

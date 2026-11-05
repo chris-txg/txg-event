@@ -11,12 +11,16 @@ from accounts.views import (
     PasswordResetConfirmView,
     PasswordResetRequestView,
     RegisterView,
+    ResendVerificationEmailView,
     VendorProfileDetailView,
+    VerifyEmailView,
 )
 
 urlpatterns = [
     # Authentication Lifecycle
     path("api/auth/register/", RegisterView.as_view(), name="auth_register"),
+    path("api/auth/verify-email/", VerifyEmailView.as_view(), name="auth_verify_email"),
+    path("api/auth/resend-verification/", ResendVerificationEmailView.as_view(), name="auth_resend_verification"),
     path("api/auth/login/", LoginView.as_view(), name="auth_login"),
     path("api/auth/token/refresh/", TokenRefreshView.as_view(), name="token_refresh"),
     path("api/auth/logout/", LogoutView.as_view(), name="auth_logout"),

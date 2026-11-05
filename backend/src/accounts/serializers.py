@@ -289,6 +289,18 @@ class PasswordResetConfirmSerializer(serializers.Serializer):
         return attrs
 
 
+class VerifyEmailSerializer(serializers.Serializer):
+    uid = serializers.CharField(required=True, help_text="Base64 encoded User UUID.")
+    token = serializers.CharField(required=True, help_text="Cryptographically secure email verification token.")
+
+
+class ResendVerificationEmailSerializer(serializers.Serializer):
+    email = serializers.EmailField(required=True, help_text="Registered email address to re-receive verification link.")
+
+    def validate_email(self, value: str) -> str:
+        return value.lower().strip()
+
+
 class AuditLogSerializer(serializers.ModelSerializer):
     actor_username = serializers.CharField(source="actor.username", read_only=True)
 

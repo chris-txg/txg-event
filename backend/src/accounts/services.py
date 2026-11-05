@@ -12,6 +12,7 @@ from django.utils.http import urlsafe_base64_decode, urlsafe_base64_encode
 
 from accounts.middleware import get_current_correlation_id
 from accounts.models import AuditAction, AuditLog, CustomerProfile, UserType, VendorProfile
+from accounts.tokens import email_verification_token
 
 User = get_user_model()
 logger = logging.getLogger(__name__)
@@ -91,7 +92,7 @@ def record_audit_log(
 
 class AuthService:
     """
-    Encapsulates all authentication and identity business logic.
+    Encapsulates all authentication, identity, and verification business logic.
     """
 
     @staticmethod
@@ -126,7 +127,80 @@ class AuthService:
                 },
             )
 
+            # Enterprise Celery trigger: dispatch email verification task only after commit
+            from accounts.tasks import send_verification_email
+            user_id = str(user.id)
+            transaction.on_commit(lambda: send_verification_email.delay(user_id))
+
         return user
+
+    @staticmethod
+    def verify_email(
+        uidb64: str,
+        token: str,
+        request: Optional[HttpRequest] = None,
+    ) -> Any:
+        """
+        Validates the verification token and sets user.is_verified = True.
+        """
+        try:
+            uid = force_str(urlsafe_base64_decode(uidb64))
+            user = User.objects.get(pk=uid, is_active=True)
+        except (TypeError, ValueError, OverflowError, User.DoesNotExist):
+            raise ValidationError({"token": "Invalid or expired verification token."})
+
+        if not email_verification_token.check_token(user, token):
+            raise ValidationError({"token": "Invalid or expired verification token."})
+
+        if not user.is_verified:
+            with transaction.atomic():
+                user.is_verified = True
+                user.save(update_fields=["is_verified"])
+                record_audit_log(
+                    action=AuditAction.EMAIL_VERIFIED,
+                    actor=user,
+                    request=request,
+                    details={"status": "verified"},
+                )
+
+        return user
+
+    @staticmethod
+    def resend_verification_email(
+        email: str,
+        request: Optional[HttpRequest] = None,
+    ) -> None:
+        """
+        Re-sends an email verification link if the user exists and is unverified.
+        Anti-enumeration safe: doesn't disclose if user exists.
+        """
+        from accounts.tasks import send_verification_email
+
+        try:
+            user = User.objects.only("id", "email", "is_verified").get(email__iexact=email, is_active=True)
+            if not user.is_verified:
+                user_id = str(user.id)
+                transaction.on_commit(lambda: send_verification_email.delay(user_id))
+                record_audit_log(
+                    action=AuditAction.EMAIL_VERIFICATION_SENT,
+                    actor=user,
+                    request=request,
+                    details={"email": email, "dispatched": True},
+                )
+            else:
+                record_audit_log(
+                    action=AuditAction.EMAIL_VERIFICATION_SENT,
+                    actor=user,
+                    request=request,
+                    details={"email": email, "dispatched": False, "reason": "already_verified"},
+                )
+        except User.DoesNotExist:
+            record_audit_log(
+                action=AuditAction.EMAIL_VERIFICATION_SENT,
+                actor=None,
+                request=request,
+                details={"email": email, "dispatched": False, "reason": "user_not_found"},
+            )
 
     @staticmethod
     def authenticate_by_credentials(
@@ -209,8 +283,6 @@ class AuthService:
                 details={"email": email, "found": True},
             )
 
-            # In production, dispatch email task via transaction.on_commit
-            # For demonstration and logs:
             reset_url = f"/auth/password-reset-confirm?uid={uid}&token={token}"
             logger.info("PASSWORD_RESET_LINK: user=%s url=%s", user.email, reset_url)
 
@@ -251,4 +323,3 @@ class AuthService:
             )
 
         return user
-

@@ -6,6 +6,9 @@ from django.utils.http import urlsafe_base64_encode
 from rest_framework import status
 from rest_framework.test import APITestCase
 
+from django.core import mail
+from accounts.tokens import email_verification_token
+from accounts.tasks import send_verification_email
 from accounts.models import (
     AuditAction,
     AuditLog,
@@ -31,6 +34,8 @@ class AuthTests(APITestCase):
         self.change_password_url = reverse("auth_password_change")
         self.reset_request_url = reverse("auth_password_reset")
         self.reset_confirm_url = reverse("auth_password_reset_confirm")
+        self.verify_email_url = reverse("auth_verify_email")
+        self.resend_verification_url = reverse("auth_resend_verification")
         self.audit_logs_url = reverse("auth_audit_logs")
 
         self.user_data = {
@@ -302,3 +307,66 @@ class AuthTests(APITestCase):
         # Deleting must raise PermissionError
         with self.assertRaises(PermissionError):
             log.delete()
+
+    def test_email_verification_flow(self) -> None:
+        self.client.post(self.register_url, self.user_data, format="json")
+        user = User.objects.get(email="john@example.com")
+        self.assertFalse(user.is_verified)
+
+        uid = urlsafe_base64_encode(force_bytes(user.pk))
+        token = email_verification_token.make_token(user)
+
+        # Verify via POST
+        res = self.client.post(self.verify_email_url, {"uid": uid, "token": token}, format="json")
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+
+        user.refresh_from_db()
+        self.assertTrue(user.is_verified)
+
+        # Audit log recorded
+        self.assertTrue(AuditLog.objects.filter(actor=user, action=AuditAction.EMAIL_VERIFIED).exists())
+
+        # Once verified, old token cannot be reused (stateless token changes when is_verified=True)
+        res_repeat = self.client.post(self.verify_email_url, {"uid": uid, "token": token}, format="json")
+        self.assertEqual(res_repeat.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_email_verification_invalid_token(self) -> None:
+        self.client.post(self.register_url, self.user_data, format="json")
+        user = User.objects.get(email="john@example.com")
+        uid = urlsafe_base64_encode(force_bytes(user.pk))
+
+        res = self.client.post(self.verify_email_url, {"uid": uid, "token": "invalid-token-123"}, format="json")
+        self.assertEqual(res.status_code, status.HTTP_400_BAD_REQUEST)
+        user.refresh_from_db()
+        self.assertFalse(user.is_verified)
+
+    def test_email_verification_via_get_link(self) -> None:
+        self.client.post(self.register_url, self.user_data, format="json")
+        user = User.objects.get(email="john@example.com")
+        uid = urlsafe_base64_encode(force_bytes(user.pk))
+        token = email_verification_token.make_token(user)
+
+        # GET request simulating email client link click
+        res = self.client.get(f"{self.verify_email_url}?uid={uid}&token={token}")
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        user.refresh_from_db()
+        self.assertTrue(user.is_verified)
+
+    def test_resend_verification_email(self) -> None:
+        self.client.post(self.register_url, self.user_data, format="json")
+        res = self.client.post(self.resend_verification_url, {"email": "john@example.com"}, format="json")
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        self.assertIn("message", res.data)
+
+    def test_send_verification_email_celery_task(self) -> None:
+        user = User.objects.create_user(
+            username="celerytest",
+            email="celery@example.com",
+            password="StrongPassword123!",
+        )
+        mail.outbox = []
+        result = send_verification_email(str(user.id))
+        self.assertTrue(result)
+        self.assertEqual(len(mail.outbox), 1)
+        self.assertIn("Verify your email address", mail.outbox[0].subject)
+        self.assertIn(user.email, mail.outbox[0].to)
