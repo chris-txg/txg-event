@@ -1,9 +1,32 @@
-from django.contrib import admin
 from django.urls import path
+from rest_framework_simplejwt.views import TokenRefreshView
 
-from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
+from accounts.views import (
+    AuditLogListView,
+    ChangePasswordView,
+    CurrentUserProfileView,
+    CustomerProfileDetailView,
+    LoginView,
+    LogoutView,
+    PasswordResetConfirmView,
+    PasswordResetRequestView,
+    RegisterView,
+    VendorProfileDetailView,
+)
 
 urlpatterns = [
-    path("api/auth/token/", TokenObtainPairView.as_view(), name="token_obtain_pair"),
+    # Authentication Lifecycle
+    path("api/auth/register/", RegisterView.as_view(), name="auth_register"),
+    path("api/auth/login/", LoginView.as_view(), name="auth_login"),
     path("api/auth/token/refresh/", TokenRefreshView.as_view(), name="token_refresh"),
+    path("api/auth/logout/", LogoutView.as_view(), name="auth_logout"),
+    path("api/auth/me/", CurrentUserProfileView.as_view(), name="auth_me"),
+    path("api/auth/me/customer-profile/", CustomerProfileDetailView.as_view(), name="auth_customer_profile"),
+    path("api/auth/me/vendor-profile/", VendorProfileDetailView.as_view(), name="auth_vendor_profile"),
+    path("api/auth/password/change/", ChangePasswordView.as_view(), name="auth_password_change"),
+    path("api/auth/password/reset/", PasswordResetRequestView.as_view(), name="auth_password_reset"),
+    path("api/auth/password/reset/confirm/", PasswordResetConfirmView.as_view(), name="auth_password_reset_confirm"),
+
+    # Audit & Compliance
+    path("api/auth/audit-logs/", AuditLogListView.as_view(), name="auth_audit_logs"),
 ]
