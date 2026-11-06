@@ -38,9 +38,21 @@ class UserAdmin(BaseUserAdmin):
     list_filter = ("user_type", "role", "is_verified", "is_staff", "is_active")
     search_fields = ("username", "email", "phone_number")
     ordering = ("-created_at",)
+    readonly_fields = ("id", "created_at", "updated_at")
     inlines = [CustomerProfileInline, VendorProfileInline]
 
-    fieldsets = BaseUserAdmin.fieldsets + (
+    fieldsets = (
+        (
+            "System Identifiers",
+            {
+                "fields": (
+                    "id",
+                    "created_at",
+                    "updated_at",
+                )
+            },
+        ),
+    ) + BaseUserAdmin.fieldsets + (
         (
             "Enterprise Classification & Verification",
             {
@@ -84,6 +96,7 @@ class CustomerProfileAdmin(admin.ModelAdmin):
     list_filter = ("customer_type", "city")
     search_fields = ("user__username", "user__email", "company_name", "gst_number", "city")
     ordering = ("-created_at",)
+    readonly_fields = ("id", "created_at", "updated_at")
 
 
 @admin.register(VendorProfile)
@@ -99,6 +112,7 @@ class VendorProfileAdmin(admin.ModelAdmin):
     list_filter = ("business_category", "is_verified_vendor", "city")
     search_fields = ("business_name", "user__username", "user__email", "gst_number", "city")
     ordering = ("-created_at",)
+    readonly_fields = ("id", "created_at", "updated_at")
 
 
 @admin.register(AuditLog)
