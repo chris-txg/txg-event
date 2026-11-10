@@ -1,6 +1,9 @@
+import os
 from typing import Any, Optional
 from django.contrib.auth import get_user_model
 from django.contrib.auth.password_validation import validate_password
+from django.core.exceptions import ValidationError as DjangoValidationError
+from django.db import transaction
 from rest_framework import serializers
 from rest_framework_simplejwt.tokens import RefreshToken
 
@@ -15,6 +18,7 @@ from accounts.models import (
 )
 from accounts.services import AuthService
 from accounts.validators import validate_gst_number, validate_pan_number
+from core.utils.images import validate_image_file
 
 User = get_user_model()
 
@@ -111,6 +115,7 @@ class UserSummarySerializer(serializers.ModelSerializer):
             "last_name",
             "user_type",
             "role",
+            "avatar",
             "is_verified",
         ]
         read_only_fields = fields
@@ -120,6 +125,7 @@ class UserProfileSerializer(serializers.ModelSerializer):
     """Detailed serializer for current user profile view and updates."""
     customer_profile = CustomerProfileSerializer(read_only=True)
     vendor_profile = VendorProfileSerializer(read_only=True)
+    avatar = serializers.ImageField(required=False, allow_null=True)
 
     class Meta:
         model = User
@@ -131,6 +137,7 @@ class UserProfileSerializer(serializers.ModelSerializer):
             "last_name",
             "user_type",
             "role",
+            "avatar",
             "phone_number",
             "is_verified",
             "notes",
@@ -141,12 +148,49 @@ class UserProfileSerializer(serializers.ModelSerializer):
         ]
         read_only_fields = ["id", "username", "email", "user_type", "role", "is_verified", "created_at", "updated_at"]
 
+    def validate_avatar(self, value: Any) -> Any:
+        if value:
+            try:
+                validate_image_file(value)
+            except DjangoValidationError as exc:
+                raise serializers.ValidationError(exc.messages if hasattr(exc, "messages") else str(exc))
+        return value
+
+    def update(self, instance: Any, validated_data: dict[str, Any]) -> Any:
+        avatar_uploaded = "avatar" in validated_data
+        new_avatar = validated_data.get("avatar")
+        old_avatar_path = None
+        if avatar_uploaded and instance.avatar:
+            try:
+                old_avatar_path = instance.avatar.path
+            except (ValueError, OSError):
+                old_avatar_path = None
+
+        with transaction.atomic():
+            user = super().update(instance, validated_data)
+            if avatar_uploaded:
+                if old_avatar_path and os.path.exists(old_avatar_path):
+                    try:
+                        new_path = getattr(user.avatar, "path", None)
+                        if new_path != old_avatar_path:
+                            os.remove(old_avatar_path)
+                    except OSError:
+                        pass
+
+                if new_avatar:
+                    from accounts.tasks import process_user_avatar_to_webp
+                    user_id = str(user.id)
+                    transaction.on_commit(lambda: process_user_avatar_to_webp.delay(user_id))
+
+        return user
+
 
 class RegisterSerializer(serializers.ModelSerializer):
     password = serializers.CharField(write_only=True, required=True, style={"input_type": "password"})
     password_confirm = serializers.CharField(write_only=True, required=True, style={"input_type": "password"})
     customer_profile = CustomerProfileSerializer(required=False)
     vendor_profile = VendorProfileSerializer(required=False)
+    avatar = serializers.ImageField(required=False, allow_null=True)
 
     class Meta:
         model = User
@@ -159,10 +203,19 @@ class RegisterSerializer(serializers.ModelSerializer):
             "first_name",
             "last_name",
             "user_type",
+            "avatar",
             "phone_number",
             "customer_profile",
             "vendor_profile",
         ]
+
+    def validate_avatar(self, value: Any) -> Any:
+        if value:
+            try:
+                validate_image_file(value)
+            except DjangoValidationError as exc:
+                raise serializers.ValidationError(exc.messages if hasattr(exc, "messages") else str(exc))
+        return value
 
     def validate_email(self, value: str) -> str:
         value = value.lower().strip()

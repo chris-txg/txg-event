@@ -2,6 +2,7 @@ from typing import Any
 from django.core.exceptions import ValidationError as DjangoValidationError
 from drf_spectacular.utils import OpenApiResponse, extend_schema
 from rest_framework import generics, status
+from rest_framework.parsers import FormParser, JSONParser, MultiPartParser
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.request import Request
 from rest_framework.response import Response
@@ -29,6 +30,7 @@ from accounts.services import AuthService, record_audit_log
 
 class RegisterView(APIView):
     permission_classes = [AllowAny]
+    parser_classes = [MultiPartParser, FormParser, JSONParser]
 
     @extend_schema(
         tags=["Authentication"],
@@ -54,7 +56,7 @@ class RegisterView(APIView):
         return Response(
             {
                 "message": "User registered successfully.",
-                "user": UserSummarySerializer(user).data,
+                "user": UserSummarySerializer(user, context={"request": request}).data,
                 "tokens": {
                     "access": str(refresh.access_token),
                     "refresh": str(refresh),
@@ -84,7 +86,7 @@ class LoginView(APIView):
         return Response(
             {
                 "message": "Login successful.",
-                "user": UserSummarySerializer(user).data,
+                "user": UserSummarySerializer(user, context={"request": request}).data,
                 "tokens": {
                     "access": serializer.validated_data["access"],
                     "refresh": serializer.validated_data["refresh"],
@@ -122,6 +124,7 @@ class LogoutView(APIView):
 
 class CurrentUserProfileView(generics.RetrieveUpdateAPIView):
     permission_classes = [IsAuthenticated]
+    parser_classes = [MultiPartParser, FormParser, JSONParser]
     serializer_class = UserProfileSerializer
 
     @extend_schema(

@@ -1,14 +1,19 @@
+import io
+import os
+import shutil
+import tempfile
+from PIL import Image
 from django.contrib.auth import get_user_model
 from django.contrib.auth.tokens import default_token_generator
+from django.core import mail
+from django.core.files.uploadedfile import SimpleUploadedFile
+from django.test import override_settings
 from django.urls import reverse
 from django.utils.encoding import force_bytes
 from django.utils.http import urlsafe_base64_encode
 from rest_framework import status
 from rest_framework.test import APITestCase
 
-from django.core import mail
-from accounts.tokens import email_verification_token
-from accounts.tasks import send_verification_email
 from accounts.models import (
     AuditAction,
     AuditLog,
@@ -19,6 +24,9 @@ from accounts.models import (
     VendorCategory,
     VendorProfile,
 )
+from accounts.tasks import process_user_avatar_to_webp, send_verification_email
+from accounts.tokens import email_verification_token
+from core.utils.images import convert_image_to_webp, validate_image_file
 
 User = get_user_model()
 
@@ -47,6 +55,22 @@ class AuthTests(APITestCase):
             "last_name": "Doe",
             "user_type": UserType.CUSTOMER,
         }
+
+        self.temp_media_dir = tempfile.mkdtemp()
+        self._media_override = override_settings(MEDIA_ROOT=self.temp_media_dir)
+        self._media_override.enable()
+
+    def tearDown(self) -> None:
+        self._media_override.disable()
+        if os.path.exists(self.temp_media_dir):
+            shutil.rmtree(self.temp_media_dir, ignore_errors=True)
+
+    def _create_test_image(self, filename: str = "test.png", format: str = "PNG", size: tuple[int, int] = (500, 500), color: str = "blue") -> SimpleUploadedFile:
+        file_obj = io.BytesIO()
+        image = Image.new("RGB", size, color=color)
+        image.save(file_obj, format=format)
+        file_obj.seek(0)
+        return SimpleUploadedFile(name=filename, content=file_obj.read(), content_type=f"image/{format.lower()}")
 
     def test_register_b2c_customer_success(self) -> None:
         payload = self.user_data.copy()
@@ -370,3 +394,87 @@ class AuthTests(APITestCase):
         self.assertEqual(len(mail.outbox), 1)
         self.assertIn("Verify your email address", mail.outbox[0].subject)
         self.assertIn(user.email, mail.outbox[0].to)
+
+    def test_avatar_registration_and_celery_task(self) -> None:
+        image_file = self._create_test_image(filename="avatar.png", format="PNG", size=(1200, 1200))
+        payload = self.user_data.copy()
+        payload["avatar"] = image_file
+
+        response = self.client.post(self.register_url, payload, format="multipart")
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertIn("avatar", response.data["user"])
+        self.assertIsNotNone(response.data["user"]["avatar"])
+
+        user = User.objects.get(email="john@example.com")
+        self.assertTrue(bool(user.avatar))
+        # Initially saved with temporary path
+        self.assertTrue(user.avatar.name.startswith("avatars/temp/"))
+        temp_file_path = user.avatar.path
+        self.assertTrue(os.path.exists(temp_file_path))
+
+        # Run Celery task for WebP conversion
+        result = process_user_avatar_to_webp(str(user.id))
+        self.assertTrue(result)
+
+        user.refresh_from_db()
+        self.assertTrue(user.avatar.name.endswith(".webp"))
+        self.assertTrue(user.avatar.name.startswith(f"avatars/{user.id}/"))
+        self.assertTrue(os.path.exists(user.avatar.path))
+
+        # Temp file was cleaned up
+        self.assertFalse(os.path.exists(temp_file_path))
+
+        # Verify image format and downscaled dimensions (max 800x800)
+        with Image.open(user.avatar.path) as img:
+            self.assertEqual(img.format, "WEBP")
+            self.assertLessEqual(img.width, 800)
+            self.assertLessEqual(img.height, 800)
+
+        # Idempotency check: running again returns True and doesn't re-process
+        repeat_result = process_user_avatar_to_webp(str(user.id))
+        self.assertTrue(repeat_result)
+
+    def test_avatar_profile_patch_update(self) -> None:
+        reg_response = self.client.post(self.register_url, self.user_data, format="json")
+        access_token = reg_response.data["tokens"]["access"]
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {access_token}")
+
+        # Upload avatar via PATCH /api/auth/me/
+        new_avatar = self._create_test_image(filename="profile.jpg", format="JPEG", size=(600, 600))
+        patch_res = self.client.patch(self.me_url, {"avatar": new_avatar}, format="multipart")
+        self.assertEqual(patch_res.status_code, status.HTTP_200_OK)
+
+        user = User.objects.get(email="john@example.com")
+        self.assertTrue(user.avatar.name.startswith("avatars/temp/"))
+
+        # Trigger conversion task
+        process_user_avatar_to_webp(str(user.id))
+        user.refresh_from_db()
+        self.assertTrue(user.avatar.name.endswith(".webp"))
+        first_webp_path = user.avatar.path
+        self.assertTrue(os.path.exists(first_webp_path))
+
+        # Replace avatar with a second image
+        second_avatar = self._create_test_image(filename="second.png", format="PNG", size=(400, 400))
+        patch_res2 = self.client.patch(self.me_url, {"avatar": second_avatar}, format="multipart")
+        self.assertEqual(patch_res2.status_code, status.HTTP_200_OK)
+
+        # Old webp was removed
+        self.assertFalse(os.path.exists(first_webp_path))
+
+    def test_avatar_invalid_file_rejected(self) -> None:
+        # 1. Plain text file disguised with .txt extension
+        fake_file = SimpleUploadedFile("script.txt", b"plain text content", content_type="text/plain")
+        payload = self.user_data.copy()
+        payload["avatar"] = fake_file
+        res = self.client.post(self.register_url, payload, format="multipart")
+        self.assertEqual(res.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("avatar", res.data)
+
+        # 2. Corrupt file disguised with .png extension
+        fake_png = SimpleUploadedFile("fake.png", b"not a real image binary stream", content_type="image/png")
+        payload["avatar"] = fake_png
+        res2 = self.client.post(self.register_url, payload, format="multipart")
+        self.assertEqual(res2.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("avatar", res2.data)
+

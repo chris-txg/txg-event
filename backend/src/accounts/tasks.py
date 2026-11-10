@@ -8,6 +8,7 @@ from django.utils.encoding import force_bytes
 from django.utils.http import urlsafe_base64_encode
 
 from accounts.tokens import email_verification_token
+from core.utils.images import convert_image_to_webp
 
 logger = logging.getLogger(__name__)
 User = get_user_model()
@@ -97,4 +98,58 @@ def send_verification_email(self: Any, user_id: str) -> bool:
         logger.exception("Failed to send verification email for user %s: %s", user_id, exc)
         countdown = 2 ** self.request.retries * 30
         raise self.retry(exc=exc, countdown=countdown)
+
+
+@shared_task(
+    bind=True,
+    max_retries=3,
+    default_retry_delay=60,
+    rate_limit="100/m",
+    time_limit=300,
+    soft_time_limit=240,
+)
+def process_user_avatar_to_webp(self: Any, user_id: str) -> bool:
+    """
+    Asynchronously converts a user's uploaded temporary avatar to WebP format.
+    Idempotent: If the avatar is already .webp and not in temp, skips conversion.
+    """
+    try:
+        user = User.objects.only("id", "avatar").get(id=user_id)
+    except User.DoesNotExist:
+        logger.warning("Avatar conversion aborted: user %s does not exist.", user_id)
+        return False
+
+    if not user.avatar or not user.avatar.name:
+        logger.info("User %s has no avatar. Skipping conversion.", user_id)
+        return True
+
+    current_path = user.avatar.name.replace("\\", "/")
+    # Idempotency check: If already converted to webp and outside temp folder
+    if current_path.endswith(".webp") and not current_path.startswith("avatars/temp/"):
+        logger.info("Avatar for user %s is already processed: %s", user_id, current_path)
+        return True
+
+    try:
+        source_full_path = user.avatar.path
+        output_dir_relative = f"avatars/{user_id}"
+        new_relative_path = convert_image_to_webp(
+            source_file_path=source_full_path,
+            output_dir_relative=output_dir_relative,
+            max_dimensions=(800, 800),
+            quality=85,
+            delete_source=True,
+        )
+
+        user.avatar.name = new_relative_path
+        user.save(update_fields=["avatar"])
+        logger.info("Successfully converted avatar to WebP for user %s: %s", user_id, new_relative_path)
+        return True
+    except FileNotFoundError:
+        logger.warning("Source avatar file for user %s not found on disk.", user_id)
+        return False
+    except Exception as exc:
+        logger.exception("Failed to convert avatar to WebP for user %s: %s", user_id, exc)
+        countdown = 2 ** self.request.retries * 30
+        raise self.retry(exc=exc, countdown=countdown)
+
 

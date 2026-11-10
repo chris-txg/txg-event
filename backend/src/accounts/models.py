@@ -1,3 +1,4 @@
+import os
 import uuid
 from typing import Any
 from django.conf import settings
@@ -6,6 +7,12 @@ from django.db import models
 from django.utils import timezone
 
 from accounts.validators import validate_gst_number, validate_pan_number
+
+
+def avatar_upload_path(instance: Any, filename: str) -> str:
+    """Generates unique temporary path for newly uploaded avatars before WebP conversion."""
+    ext = os.path.splitext(filename)[1].lower()
+    return f"avatars/temp/{uuid.uuid4().hex}{ext}"
 
 
 class UserType(models.TextChoices):
@@ -59,6 +66,13 @@ class User(AbstractUser):
         blank=True,
         null=True,
         db_index=True,
+    )
+    avatar = models.ImageField(
+        upload_to=avatar_upload_path,
+        max_length=255,
+        null=True,
+        blank=True,
+        help_text="User profile picture (stored temporarily on upload, converted to WebP via Celery)",
     )
     is_verified = models.BooleanField(default=False, db_index=True)
     notes = models.TextField(blank=True, null=True)

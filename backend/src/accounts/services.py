@@ -128,9 +128,12 @@ class AuthService:
             )
 
             # Enterprise Celery trigger: dispatch email verification task only after commit
-            from accounts.tasks import send_verification_email
+            from accounts.tasks import process_user_avatar_to_webp, send_verification_email
             user_id = str(user.id)
             transaction.on_commit(lambda: send_verification_email.delay(user_id))
+
+            if user.avatar:
+                transaction.on_commit(lambda: process_user_avatar_to_webp.delay(user_id))
 
         return user
 
