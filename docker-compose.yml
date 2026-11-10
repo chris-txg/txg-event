@@ -13,7 +13,11 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-txg-event}"]
+      test:
+        [
+          "CMD-SHELL",
+          "pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-txg-event}",
+        ]
       interval: 5s
       timeout: 5s
       retries: 5
@@ -66,6 +70,8 @@ services:
       - ./backend/src:/app
     ports:
       - "8000:8000"
+    env_file:
+      - ./backend/.env
     environment:
       POSTGRES_DB: ${POSTGRES_DB:-txg-event}
       POSTGRES_USER: ${POSTGRES_USER:-postgres}
@@ -100,6 +106,8 @@ services:
     command: celery -A core worker -l info
     volumes:
       - ./backend/src:/app
+    env_file:
+      - ./backend/.env
     environment:
       POSTGRES_DB: ${POSTGRES_DB:-txg-event}
       POSTGRES_USER: ${POSTGRES_USER:-postgres}
@@ -133,6 +141,8 @@ services:
     command: celery -A core beat -l info
     volumes:
       - ./backend/src:/app
+    env_file:
+      - ./backend/.env
     environment:
       POSTGRES_DB: ${POSTGRES_DB:-txg-event}
       POSTGRES_USER: ${POSTGRES_USER:-postgres}
@@ -163,7 +173,7 @@ services:
     restart: unless-stopped
     tty: true
     stdin_open: true
-    command: npm run dev
+    command: sh -c "npm install && npm run dev"
     volumes:
       - ./frontend:/app
       - /app/node_modules
@@ -172,6 +182,7 @@ services:
       - "3000:3000"
     environment:
       NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:8000}
+      DJANGO_API_URL: http://backend:8000
     depends_on:
       - backend
     networks:
@@ -184,4 +195,3 @@ volumes:
 networks:
   event_network:
     driver: bridge
-

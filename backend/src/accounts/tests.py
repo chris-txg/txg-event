@@ -24,7 +24,11 @@ from accounts.models import (
     VendorCategory,
     VendorProfile,
 )
-from accounts.tasks import process_user_avatar_to_webp, send_verification_email
+from accounts.tasks import (
+    process_user_avatar_to_webp,
+    send_password_reset_email,
+    send_verification_email,
+)
 from accounts.tokens import email_verification_token
 from core.utils.images import convert_image_to_webp, validate_image_file
 
@@ -393,7 +397,29 @@ class AuthTests(APITestCase):
         self.assertTrue(result)
         self.assertEqual(len(mail.outbox), 1)
         self.assertIn("Verify your email address", mail.outbox[0].subject)
+        self.assertIn("Event Manager", mail.outbox[0].subject)
         self.assertIn(user.email, mail.outbox[0].to)
+        self.assertIn("/verify-email?uid=", mail.outbox[0].body)
+        html_body = mail.outbox[0].alternatives[0][0]
+        self.assertIn("#762D46", html_body)
+        self.assertIn("Event Manager", html_body)
+
+    def test_send_password_reset_email_celery_task(self) -> None:
+        user = User.objects.create_user(
+            username="resettest",
+            email="reset@example.com",
+            password="StrongPassword123!",
+        )
+        mail.outbox = []
+        result = send_password_reset_email(str(user.id))
+        self.assertTrue(result)
+        self.assertEqual(len(mail.outbox), 1)
+        self.assertIn("Reset your password - Event Manager", mail.outbox[0].subject)
+        self.assertIn(user.email, mail.outbox[0].to)
+        self.assertIn("/reset-password?uid=", mail.outbox[0].body)
+        html_body = mail.outbox[0].alternatives[0][0]
+        self.assertIn("#762D46", html_body)
+        self.assertIn("Event Manager", html_body)
 
     def test_avatar_registration_and_celery_task(self) -> None:
         image_file = self._create_test_image(filename="avatar.png", format="PNG", size=(1200, 1200))

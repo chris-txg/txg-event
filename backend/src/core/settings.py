@@ -14,7 +14,6 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 
 # Load environment variables from .env files
 load_dotenv(BASE_DIR.parent / '.env')
-load_dotenv(BASE_DIR.parent.parent / '.env')
 
 # Quick-start development settings - unsuitable for production
 SECRET_KEY = os.environ.get('DJANGO_SECRET_KEY', 'django-insecure-!ok$in#vktuimx*2(2b53a+#9nh2dlg(n*9pz#j#a*5+ux-a-$')

@@ -1,0 +1,112 @@
+{% extends "accounts/emails/base_email.html" %} {% block title %} Verify Your
+Email &mdash; Event Manager {% endblock %} {% block content %}
+<div
+  style="
+    font-size: 11px;
+    font-weight: 700;
+    color: #762d46;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    margin-bottom: 8px;
+  "
+>
+  EMAIL VERIFICATION
+</div>
+
+<h1
+  style="
+    margin: 0 0 12px 0;
+    font-size: 22px;
+    font-weight: 800;
+    color: #30232a;
+    letter-spacing: -0.02em;
+    line-height: 1.25;
+  "
+>
+  Verify your email address
+</h1>
+
+<p
+  style="margin: 0 0 10px 0; font-size: 14px; color: #30232a; line-height: 1.6"
+>
+  Hello <strong>{{ display_name }}</strong>,
+</p>
+
+<p
+  style="margin: 0 0 24px 0; font-size: 14px; color: #75666d; line-height: 1.65"
+>
+  Thank you for creating an account on
+  <strong style="color: #30232a">Event Manager</strong>. Please confirm your
+  email address below to verify your account.
+</p>
+
+<!-- Primary CTA Button -->
+<table
+  role="presentation"
+  width="100%"
+  cellspacing="0"
+  cellpadding="0"
+  border="0"
+  style="margin: 26px 0"
+>
+  <tr>
+    <td align="center">
+      <a
+        href="{{ verification_link }}"
+        target="_blank"
+        style="
+          display: inline-block;
+          background-color: #762d46;
+          color: #ffffff;
+          text-decoration: none;
+          font-size: 14px;
+          font-weight: 700;
+          padding: 13px 30px;
+          border-radius: 12px;
+          box-shadow: 0 6px 18px rgba(118, 45, 70, 0.25);
+        "
+      >
+        Verify Email Address &rarr;
+      </a>
+    </td>
+  </tr>
+</table>
+
+<!-- Subtle Security Notice -->
+<table
+  role="presentation"
+  width="100%"
+  cellspacing="0"
+  cellpadding="0"
+  border="0"
+  style="
+    background-color: #f8eff2;
+    border: 1px solid #e9dde1;
+    border-radius: 12px;
+    margin-bottom: 22px;
+  "
+>
+  <tr>
+    <td style="padding: 13px 16px">
+      <p style="margin: 0; font-size: 12px; color: #542037; line-height: 1.55">
+        <strong>Note:</strong> This verification link will expire automatically
+        in <strong>{{ expiry_hours }} hours</strong>.
+      </p>
+    </td>
+  </tr>
+</table>
+
+<!-- Fallback Link -->
+<p style="margin: 0 0 4px 0; font-size: 12px; color: #75666d">
+  Button not working? Paste this link into your browser:
+</p>
+<p style="margin: 0; font-size: 12px; word-break: break-all; line-height: 1.5">
+  <a
+    href="{{ verification_link }}"
+    style="color: #762d46; text-decoration: underline"
+  >
+    {{ verification_link }}
+  </a>
+</p>
+{% endblock %} {% block footer_note %} If you didn&rsquo;t create an Event
+Manager account, you can safely ignore this email. {% endblock %}

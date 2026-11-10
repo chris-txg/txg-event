@@ -274,10 +274,10 @@ class AuthService:
         Generates token and triggers reset email.
         Prevents user enumeration by succeeding silently if email is not found.
         """
+        from accounts.tasks import send_password_reset_email
+
         try:
             user = User.objects.only("id", "email", "username").get(email__iexact=email, is_active=True)
-            uid = urlsafe_base64_encode(force_bytes(user.pk))
-            token = default_token_generator.make_token(user)
 
             record_audit_log(
                 action=AuditAction.PASSWORD_RESET_REQUEST,
@@ -286,8 +286,8 @@ class AuthService:
                 details={"email": email, "found": True},
             )
 
-            reset_url = f"/auth/password-reset-confirm?uid={uid}&token={token}"
-            logger.info("PASSWORD_RESET_LINK: user=%s url=%s", user.email, reset_url)
+            user_id = str(user.id)
+            transaction.on_commit(lambda: send_password_reset_email.delay(user_id))
 
         except User.DoesNotExist:
             record_audit_log(
