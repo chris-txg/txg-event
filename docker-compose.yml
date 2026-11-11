@@ -82,7 +82,7 @@ services:
       REDIS_PORT: 6379
       REDIS_URL: redis://redis:6379/0
       CELERY_BROKER_URL: redis://redis:6379/1
-      CELERY_RESULT_BACKEND: redis://redis:6379/2
+      CELERY_RESULT_BACKEND: django-db
       DJANGO_SECRET_KEY: ${DJANGO_SECRET_KEY:-django-insecure-prod-key-for-local-docker}
       DJANGO_DEBUG: ${DJANGO_DEBUG:-True}
       DJANGO_ALLOWED_HOSTS: ${DJANGO_ALLOWED_HOSTS:-*}
@@ -118,7 +118,7 @@ services:
       REDIS_PORT: 6379
       REDIS_URL: redis://redis:6379/0
       CELERY_BROKER_URL: redis://redis:6379/1
-      CELERY_RESULT_BACKEND: redis://redis:6379/2
+      CELERY_RESULT_BACKEND: django-db
       DJANGO_SECRET_KEY: ${DJANGO_SECRET_KEY:-django-insecure-prod-key-for-local-docker}
       DJANGO_DEBUG: ${DJANGO_DEBUG:-True}
     depends_on:
@@ -153,7 +153,7 @@ services:
       REDIS_PORT: 6379
       REDIS_URL: redis://redis:6379/0
       CELERY_BROKER_URL: redis://redis:6379/1
-      CELERY_RESULT_BACKEND: redis://redis:6379/2
+      CELERY_RESULT_BACKEND: django-db
       DJANGO_SECRET_KEY: ${DJANGO_SECRET_KEY:-django-insecure-prod-key-for-local-docker}
       DJANGO_DEBUG: ${DJANGO_DEBUG:-True}
     depends_on:
