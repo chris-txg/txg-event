@@ -4,6 +4,7 @@ from django.urls import reverse
 from rest_framework import status
 from rest_framework.test import APITestCase
 
+from projects.models import EventProject
 from survey.models import Answer, Question, QuestionChoice, Survey, SurveyResponse
 
 User = get_user_model()
@@ -25,9 +26,15 @@ class SurveyTests(APITestCase):
 
         self.surveys_url = reverse("survey_list_create")
         self.my_submissions_url = reverse("survey_my_submissions")
+        self.project = EventProject.objects.create(
+            owner=self.user1,
+            project_name="Tech Summit 2026",
+            status=EventProject.Status.CREATED,
+        )
 
     def test_create_survey(self) -> None:
         payload = {
+            "project": str(self.project.id),
             "title": "Customer Feedback 2026",
             "description": "Annual customer feedback questionnaire",
             "visibility": Survey.Visibility.PUBLIC,
@@ -37,8 +44,25 @@ class SurveyTests(APITestCase):
         res = self.client.post(self.surveys_url, payload, format="json")
         self.assertEqual(res.status_code, status.HTTP_201_CREATED)
         self.assertEqual(res.data["title"], "Customer Feedback 2026")
+        self.assertEqual(str(res.data["project"]), str(self.project.id))
         self.assertEqual(res.data["status"], Survey.Status.DRAFT)
         self.assertEqual(res.data["created_by_username"], "survey_creator")
+
+    def test_create_survey_requires_owned_project(self) -> None:
+        # Missing project -> 400
+        res_missing = self.client.post(self.surveys_url, {"title": "No Project Survey"}, format="json")
+        self.assertEqual(res_missing.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("project", res_missing.data)
+
+        # Another user's project -> 400
+        other_project = EventProject.objects.create(owner=self.user2, project_name="Other User Project")
+        res_other = self.client.post(
+            self.surveys_url,
+            {"project": str(other_project.id), "title": "Unauthorized Project Survey"},
+            format="json",
+        )
+        self.assertEqual(res_other.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("project", res_other.data)
 
     def test_add_questions_and_choices(self) -> None:
         survey = Survey.objects.create(title="Product Survey", created_by=self.user1)

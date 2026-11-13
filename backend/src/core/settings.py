@@ -29,6 +29,7 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
+    'django.contrib.postgres',
 
     'rest_framework',
     'rest_framework_simplejwt',
@@ -48,6 +49,7 @@ INSTALLED_APPS = [
     'django_celery_results',
 
     'accounts',
+    'projects',
     'survey',
 ]
 
@@ -192,6 +194,10 @@ SPECTACULAR_SETTINGS = {
     "DESCRIPTION": "Production-grade Event Platform API with complete Auth, Audit, and Monitoring.",
     "VERSION": "1.0.0",
     "SERVE_INCLUDE_SCHEMA": False,
+    "ENUM_NAME_OVERRIDES": {
+        "EventProjectStatusEnum": "projects.models.EventProject.Status",
+        "SurveyStatusEnum": "survey.models.Survey.Status",
+    },
 }
 
 # Caches (Redis)

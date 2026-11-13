@@ -51,10 +51,17 @@ class SurveyListCreateView(generics.ListCreateAPIView):
         mine = self.request.query_params.get("mine", "").lower() in ("true", "1")
 
         if mine:
-            return Survey.objects.filter(created_by=user).select_related("created_by")
+            qs = Survey.objects.filter(created_by=user).select_related("created_by", "project")
+            project_param = self.request.query_params.get("project")
+            if project_param:
+                qs = qs.filter(project_id=project_param)
+            return qs
 
         # Default explore listing:
-        qs = Survey.objects.select_related("created_by")
+        qs = Survey.objects.select_related("created_by", "project")
+        project_param = self.request.query_params.get("project")
+        if project_param:
+            qs = qs.filter(project_id=project_param)
         status_param = self.request.query_params.get("status")
         visibility_param = self.request.query_params.get("visibility")
 

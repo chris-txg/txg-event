@@ -4,6 +4,7 @@ from django.db import transaction
 from django.utils import timezone
 from rest_framework import serializers
 
+from projects.models import EventProject
 from survey.models import Answer, Question, QuestionChoice, Survey, SurveyResponse
 
 
@@ -71,6 +72,7 @@ class QuestionCreateSerializer(serializers.ModelSerializer):
 
 class SurveyListSerializer(serializers.ModelSerializer):
     created_by_username = serializers.CharField(source="created_by.username", read_only=True)
+    project_name = serializers.CharField(source="project.project_name", read_only=True, allow_null=True)
     is_active = serializers.BooleanField(read_only=True)
     response_count = serializers.IntegerField(read_only=True)
 
@@ -78,6 +80,8 @@ class SurveyListSerializer(serializers.ModelSerializer):
         model = Survey
         fields = [
             "id",
+            "project",
+            "project_name",
             "title",
             "description",
             "status",
@@ -96,6 +100,7 @@ class SurveyListSerializer(serializers.ModelSerializer):
 
 class SurveyDetailSerializer(serializers.ModelSerializer):
     created_by_username = serializers.CharField(source="created_by.username", read_only=True)
+    project_name = serializers.CharField(source="project.project_name", read_only=True, allow_null=True)
     is_active = serializers.BooleanField(read_only=True)
     response_count = serializers.IntegerField(read_only=True)
     questions = QuestionSerializer(many=True, read_only=True)
@@ -104,6 +109,8 @@ class SurveyDetailSerializer(serializers.ModelSerializer):
         model = Survey
         fields = [
             "id",
+            "project",
+            "project_name",
             "title",
             "description",
             "status",
@@ -119,14 +126,21 @@ class SurveyDetailSerializer(serializers.ModelSerializer):
             "created_at",
             "updated_at",
         ]
-        read_only_fields = ["id", "created_by_username", "is_active", "response_count", "created_at", "updated_at"]
+        read_only_fields = ["id", "created_by_username", "project_name", "is_active", "response_count", "created_at", "updated_at"]
 
 
 class SurveyCreateUpdateSerializer(serializers.ModelSerializer):
+    project = serializers.PrimaryKeyRelatedField(
+        queryset=EventProject.objects.all(),
+        required=True,
+        help_text="UUID of the Event Project this survey belongs to.",
+    )
+
     class Meta:
         model = Survey
         fields = [
             "id",
+            "project",
             "title",
             "description",
             "status",
@@ -137,6 +151,14 @@ class SurveyCreateUpdateSerializer(serializers.ModelSerializer):
             "end_date",
         ]
         read_only_fields = ["id"]
+
+    def validate_project(self, value: EventProject) -> EventProject:
+        request = self.context.get("request")
+        if request and request.user and request.user.is_authenticated:
+            is_admin = request.user.is_staff or getattr(request.user, "role", None) in ["ADMIN", "SUPERADMIN"]
+            if not is_admin and value.owner_id != request.user.id:
+                raise serializers.ValidationError("You can only create surveys for your own Event Projects.")
+        return value
 
     def validate(self, attrs: dict[str, Any]) -> dict[str, Any]:
         start = attrs.get("start_date", getattr(self.instance, "start_date", None))

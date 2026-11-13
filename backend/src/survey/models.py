@@ -22,6 +22,14 @@ class Survey(models.Model):
         ONE_PER_IP = "one_per_ip", "One Submission Per IP Address"
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    project = models.ForeignKey(
+        "projects.EventProject",
+        on_delete=models.CASCADE,
+        related_name="surveys",
+        db_index=True,
+        null=True,
+        blank=False,
+    )
     title = models.CharField(max_length=255)
     description = models.TextField(blank=True)
     created_by = models.ForeignKey(
@@ -61,6 +69,7 @@ class Survey(models.Model):
         indexes = [
             models.Index(fields=["status", "visibility"]),
             models.Index(fields=["created_by", "status"]),
+            models.Index(fields=["project", "status"]),
         ]
 
     def __str__(self) -> str:
