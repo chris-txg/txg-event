@@ -17,7 +17,7 @@ import { Mail, Lock, ArrowRight } from 'lucide-react';
 export function LoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const redirectPath = searchParams.get('redirect') || '/profile';
+  const redirectPath = searchParams.get('redirect') || '/services';
   const { setUser } = useAuth();
 
   const [serverError, setServerError] = useState<string | null>(null);
