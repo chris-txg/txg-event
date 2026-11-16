@@ -154,11 +154,26 @@ FRONTEND_URL = os.environ.get("FRONTEND_URL", "http://localhost:3000")
 
 AUTH_USER_MODEL = "accounts.User"
 
-CORS_ALLOWED_ORIGINS = [
-    "http://localhost:3000",
-    "http://127.0.0.1:3000",
-]
+# Dynamic CORS and CSRF configurations for Production & Staging subdomains
+cors_origins_env = os.environ.get("CORS_ALLOWED_ORIGINS", "")
+if cors_origins_env:
+    CORS_ALLOWED_ORIGINS = [origin.strip() for origin in cors_origins_env.split(",") if origin.strip()]
+else:
+    CORS_ALLOWED_ORIGINS = [
+        "http://localhost:3000",
+        "http://127.0.0.1:3000",
+    ]
+    if FRONTEND_URL and FRONTEND_URL not in CORS_ALLOWED_ORIGINS:
+        CORS_ALLOWED_ORIGINS.append(FRONTEND_URL.rstrip("/"))
+
+csrf_trusted_env = os.environ.get("CSRF_TRUSTED_ORIGINS", "")
+if csrf_trusted_env:
+    CSRF_TRUSTED_ORIGINS = [origin.strip() for origin in csrf_trusted_env.split(",") if origin.strip()]
+elif FRONTEND_URL and FRONTEND_URL.startswith("https://"):
+    CSRF_TRUSTED_ORIGINS = [FRONTEND_URL.rstrip("/")]
+
 CORS_ALLOW_CREDENTIALS = True
+
 
 REST_FRAMEWORK = {
     "DEFAULT_AUTHENTICATION_CLASSES": [

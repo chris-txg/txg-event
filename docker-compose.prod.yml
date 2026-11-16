@@ -1,0 +1,168 @@
+services:
+  # -------------------------------------------------------------
+  # PostgreSQL Database Service
+  # -------------------------------------------------------------
+  postgres:
+    image: postgres:16-alpine
+    container_name: event_postgres_prod
+    restart: always
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-txg-event}
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - postgres_data_prod:/var/lib/postgresql/data
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-txg-event}",
+        ]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - event_prod_net
+
+  # -------------------------------------------------------------
+  # Redis Cache & Celery Broker
+  # -------------------------------------------------------------
+  redis:
+    image: redis:7-alpine
+    container_name: event_redis_prod
+    restart: always
+    volumes:
+      - redis_data_prod:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - event_prod_net
+
+  # -------------------------------------------------------------
+  # Django REST Framework Backend (Gunicorn)
+  # -------------------------------------------------------------
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: event_backend_prod
+    restart: always
+    command: gunicorn core.wsgi:application --bind 0.0.0.0:8000 --workers 3 --timeout 120
+    volumes:
+      - media_volume_prod:/app/media
+      - static_volume_prod:/app/static
+    ports:
+      - "127.0.0.1:${BACKEND_PORT:-8000}:8000"
+
+    env_file:
+      - ./backend/.env
+    environment:
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: 5432
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      REDIS_URL: redis://redis:6379/0
+      CELERY_BROKER_URL: redis://redis:6379/1
+      CELERY_RESULT_BACKEND: django-db
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - event_prod_net
+
+  # -------------------------------------------------------------
+  # Celery Background Task Worker
+  # -------------------------------------------------------------
+  celery_worker:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: event_celery_worker_prod
+    restart: always
+    command: celery -A core worker -l info --concurrency=2
+    volumes:
+      - media_volume_prod:/app/media
+    env_file:
+      - ./backend/.env
+    environment:
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: 5432
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      REDIS_URL: redis://redis:6379/0
+      CELERY_BROKER_URL: redis://redis:6379/1
+      CELERY_RESULT_BACKEND: django-db
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - event_prod_net
+
+  # -------------------------------------------------------------
+  # Celery Beat Scheduled Task Runner
+  # -------------------------------------------------------------
+  celery_beat:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: event_celery_beat_prod
+    restart: always
+    command: celery -A core beat -l info
+    env_file:
+      - ./backend/.env
+    environment:
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: 5432
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      REDIS_URL: redis://redis:6379/0
+      CELERY_BROKER_URL: redis://redis:6379/1
+      CELERY_RESULT_BACKEND: django-db
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - event_prod_net
+
+  # -------------------------------------------------------------
+  # Next.js Frontend Application
+  # -------------------------------------------------------------
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile.prod
+    container_name: event_frontend_prod
+    restart: always
+    ports:
+      - "127.0.0.1:${FRONTEND_PORT:-3000}:3000"
+
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+    depends_on:
+      - backend
+    networks:
+      - event_prod_net
+
+# -------------------------------------------------------------
+# Persistent Volumes & Private Bridge Network
+# -------------------------------------------------------------
+volumes:
+  postgres_data_prod:
+  redis_data_prod:
+  media_volume_prod:
+  static_volume_prod:
+
+networks:
+  event_prod_net:
+    driver: bridge
+
