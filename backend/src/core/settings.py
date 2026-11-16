@@ -248,3 +248,12 @@ DJ_REDIS_PANEL_SETTINGS = {
         },
     }
 }
+
+# Razorpay Configuration
+RAZORPAY_KEY_ID = os.environ.get("RAZORPAY_KEY_ID", "")
+RAZORPAY_KEY_SECRET = os.environ.get("RAZORPAY_KEY_SECRET", "")
+RAZORPAY_MERCHANT_ID = os.environ.get("RAZORPAY_MERCHANT_ID", "")
+RAZORPAY_ACCOUNT_NUMBER = os.environ.get("RAZORPAY_ACCOUNT_NUMBER", "")
+RAZORPAY_WEBHOOK_SECRET = os.environ.get("RAZORPAY_WEBHOOK_SECRET", "")
+SURVEY_PUBLISH_FEE_INR = int(os.environ.get("SURVEY_PUBLISH_FEE_INR", "499"))
+

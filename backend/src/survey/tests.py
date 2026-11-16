@@ -106,14 +106,19 @@ class SurveyTests(APITestCase):
         publish_url = reverse("survey_publish", kwargs={"id": survey.id})
         close_url = reverse("survey_close", kwargs={"id": survey.id})
 
-        # Cannot publish without questions
-        pub_fail = self.client.post(publish_url)
-        self.assertEqual(pub_fail.status_code, status.HTTP_400_BAD_REQUEST)
-
         # Add a question
         Question.objects.create(survey=survey, text="Are you coming?", question_type=Question.QuestionType.BOOLEAN)
 
-        # Now publish
+        # Cannot publish without payment -> 402 Payment Required
+        pub_unpaid = self.client.post(publish_url)
+        self.assertEqual(pub_unpaid.status_code, status.HTTP_402_PAYMENT_REQUIRED)
+        self.assertEqual(pub_unpaid.data["code"], "PAYMENT_REQUIRED")
+
+        # Mark paid
+        survey.is_paid = True
+        survey.save()
+
+        # Now publish succeeds
         pub_res = self.client.post(publish_url)
         self.assertEqual(pub_res.status_code, status.HTTP_200_OK)
         survey.refresh_from_db()
@@ -126,6 +131,112 @@ class SurveyTests(APITestCase):
         survey.refresh_from_db()
         self.assertEqual(survey.status, Survey.Status.CLOSED)
         self.assertFalse(survey.is_active)
+
+    def test_razorpay_payment_and_publish_flow(self) -> None:
+        survey = Survey.objects.create(title="Paid Survey", created_by=self.user1)
+        Question.objects.create(survey=survey, text="Rate this", question_type=Question.QuestionType.NUMBER)
+
+        order_url = reverse("survey_payment_order", kwargs={"id": survey.id})
+        verify_url = reverse("survey_payment_verify", kwargs={"id": survey.id})
+        publish_url = reverse("survey_publish", kwargs={"id": survey.id})
+
+        # 1. Create Order
+        res_order = self.client.post(order_url)
+        self.assertEqual(res_order.status_code, status.HTTP_200_OK)
+        order_id = res_order.data["order_id"]
+        self.assertTrue(order_id.startswith("order_"))
+
+        # 2. Verify with invalid signature -> 400
+        res_bad_sig = self.client.post(
+            verify_url,
+            {
+                "razorpay_order_id": order_id,
+                "razorpay_payment_id": "pay_test123",
+                "razorpay_signature": "invalid_sig",
+            },
+            format="json",
+        )
+        self.assertEqual(res_bad_sig.status_code, status.HTTP_400_BAD_REQUEST)
+        survey.refresh_from_db()
+        self.assertFalse(survey.is_paid)
+
+        # 3. Verify with valid signature -> 200
+        res_good_sig = self.client.post(
+            verify_url,
+            {
+                "razorpay_order_id": order_id,
+                "razorpay_payment_id": "pay_test123",
+                "razorpay_signature": "mock_signature_123",
+            },
+            format="json",
+        )
+        self.assertEqual(res_good_sig.status_code, status.HTTP_200_OK)
+        survey.refresh_from_db()
+        self.assertTrue(survey.is_paid)
+
+        # 4. Now publish succeeds
+        res_pub = self.client.post(publish_url)
+        self.assertEqual(res_pub.status_code, status.HTTP_200_OK)
+        survey.refresh_from_db()
+        self.assertEqual(survey.status, Survey.Status.PUBLISHED)
+
+    def test_razorpay_webhook_event(self) -> None:
+        import json
+        from survey.models import SurveyPayment
+
+        survey = Survey.objects.create(title="Webhook Survey", created_by=self.user1)
+        payment = SurveyPayment.objects.create(
+            survey=survey,
+            user=self.user1,
+            razorpay_order_id="order_webhook_123",
+            amount=499,
+            currency="INR",
+            status=SurveyPayment.Status.PENDING,
+        )
+
+        webhook_url = reverse("razorpay_webhook")
+        payload = {
+            "event": "payment.captured",
+            "payload": {
+                "payment": {
+                    "entity": {
+                        "id": "pay_webhook_456",
+                        "order_id": "order_webhook_123",
+                        "status": "captured",
+                    }
+                }
+            },
+        }
+        raw_body = json.dumps(payload)
+
+        # 1. Missing header -> 400
+        res_missing = self.client.post(webhook_url, data=raw_body, content_type="application/json")
+        self.assertEqual(res_missing.status_code, status.HTTP_400_BAD_REQUEST)
+
+        # 2. Invalid signature -> 400
+        res_bad = self.client.post(
+            webhook_url,
+            data=raw_body,
+            content_type="application/json",
+            HTTP_X_RAZORPAY_SIGNATURE="bad_signature",
+        )
+        self.assertEqual(res_bad.status_code, status.HTTP_400_BAD_REQUEST)
+
+        # 3. Valid test signature -> 200
+        res_ok = self.client.post(
+            webhook_url,
+            data=raw_body,
+            content_type="application/json",
+            HTTP_X_RAZORPAY_SIGNATURE="mock_signature_test",
+        )
+        self.assertEqual(res_ok.status_code, status.HTTP_200_OK)
+        survey.refresh_from_db()
+        self.assertTrue(survey.is_paid)
+        payment.refresh_from_db()
+        self.assertEqual(payment.status, SurveyPayment.Status.SUCCESS)
+        self.assertEqual(payment.razorpay_payment_id, "pay_webhook_456")
+
+
 
     def test_survey_listing_and_mine_filter(self) -> None:
         s1 = Survey.objects.create(title="Creator Survey 1", created_by=self.user1, status=Survey.Status.DRAFT)

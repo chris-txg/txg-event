@@ -5,7 +5,8 @@ from django.utils import timezone
 from rest_framework import serializers
 
 from projects.models import EventProject
-from survey.models import Answer, Question, QuestionChoice, Survey, SurveyResponse
+from survey.models import Answer, Question, QuestionChoice, Survey, SurveyPayment, SurveyResponse
+
 
 
 class QuestionChoiceSerializer(serializers.ModelSerializer):
@@ -90,6 +91,7 @@ class SurveyListSerializer(serializers.ModelSerializer):
             "duplicate_rule",
             "start_date",
             "end_date",
+            "is_paid",
             "created_by_username",
             "is_active",
             "response_count",
@@ -119,6 +121,7 @@ class SurveyDetailSerializer(serializers.ModelSerializer):
             "duplicate_rule",
             "start_date",
             "end_date",
+            "is_paid",
             "created_by_username",
             "is_active",
             "response_count",
@@ -126,7 +129,16 @@ class SurveyDetailSerializer(serializers.ModelSerializer):
             "created_at",
             "updated_at",
         ]
-        read_only_fields = ["id", "created_by_username", "project_name", "is_active", "response_count", "created_at", "updated_at"]
+        read_only_fields = [
+            "id",
+            "is_paid",
+            "created_by_username",
+            "project_name",
+            "is_active",
+            "response_count",
+            "created_at",
+            "updated_at",
+        ]
 
 
 class SurveyCreateUpdateSerializer(serializers.ModelSerializer):
@@ -313,4 +325,39 @@ class SurveyResponseDetailSerializer(serializers.ModelSerializer):
             "submitted_at",
             "answers",
         ]
+
+
+class SurveyPaymentOrderResponseSerializer(serializers.Serializer):
+    order_id = serializers.CharField()
+    amount = serializers.DecimalField(max_digits=10, decimal_places=2)
+    amount_paise = serializers.IntegerField()
+    currency = serializers.CharField()
+    key_id = serializers.CharField()
+    survey_id = serializers.UUIDField()
+    survey_title = serializers.CharField()
+
+
+class SurveyPaymentVerifySerializer(serializers.Serializer):
+    razorpay_order_id = serializers.CharField(required=True, max_length=100)
+    razorpay_payment_id = serializers.CharField(required=True, max_length=100)
+    razorpay_signature = serializers.CharField(required=True, max_length=255)
+
+
+class SurveyPaymentSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = SurveyPayment
+        fields = [
+            "id",
+            "survey",
+            "user",
+            "razorpay_order_id",
+            "razorpay_payment_id",
+            "amount",
+            "currency",
+            "status",
+            "created_at",
+            "updated_at",
+        ]
+        read_only_fields = fields
+
 

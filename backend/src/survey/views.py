@@ -20,10 +20,13 @@ from survey.serializers import (
     SurveyCreateUpdateSerializer,
     SurveyDetailSerializer,
     SurveyListSerializer,
+    SurveyPaymentOrderResponseSerializer,
+    SurveyPaymentVerifySerializer,
     SurveyResponseDetailSerializer,
     SurveySubmitSerializer,
 )
-from survey.services import SurveyService
+from survey.services import RazorpayService, SurveyService
+
 
 
 class SurveyListCreateView(generics.ListCreateAPIView):
@@ -165,21 +168,159 @@ class SurveyPublishView(APIView):
 
     @extend_schema(
         tags=["Surveys - Management"],
-        summary="Publish a survey (Opens it for responses)",
+        summary="Publish a survey (Opens it for responses - requires completed payment)",
         request=None,
         responses={
             status.HTTP_200_OK: OpenApiResponse(description="Survey published successfully."),
             status.HTTP_400_BAD_REQUEST: OpenApiResponse(description="Cannot publish without questions."),
+            status.HTTP_402_PAYMENT_REQUIRED: OpenApiResponse(description="Payment required before publishing."),
         },
     )
     def post(self, request: Request, id: str) -> Response:
         survey = get_object_or_404(Survey, id=id)
         self.check_object_permissions(request, survey)
+
+        if not survey.is_paid:
+            return Response(
+                {
+                    "detail": "Payment is required before publishing this survey. Please complete payment first.",
+                    "code": "PAYMENT_REQUIRED",
+                    "survey_id": str(survey.id),
+                    "payment_order_url": f"/api/surveys/{survey.id}/payment/order/",
+                },
+                status=status.HTTP_402_PAYMENT_REQUIRED,
+            )
+
         try:
             SurveyService.publish_survey(survey)
         except DjangoValidationError as exc:
             return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
         return Response({"message": f"Survey '{survey.title}' is now published and active."}, status=status.HTTP_200_OK)
+
+
+class SurveyCreatePaymentOrderView(APIView):
+    """
+    Creates a Razorpay payment order for the survey publishing fee.
+    """
+
+    permission_classes = [permissions.IsAuthenticated, IsSurveyOwnerOrStaff]
+
+    @extend_schema(
+        tags=["Surveys - Payments"],
+        summary="Create a Razorpay order to pay the survey publishing fee",
+        request=None,
+        responses={
+            status.HTTP_200_OK: SurveyPaymentOrderResponseSerializer,
+            status.HTTP_400_BAD_REQUEST: OpenApiResponse(description="Survey already paid or error."),
+        },
+    )
+    def post(self, request: Request, id: str) -> Response:
+        survey = get_object_or_404(Survey, id=id)
+        self.check_object_permissions(request, survey)
+
+        if survey.is_paid:
+            return Response(
+                {"detail": "This survey is already paid and ready to publish."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        try:
+            payment = RazorpayService.create_order(survey=survey, user=request.user)
+        except DjangoValidationError as exc:
+            return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+
+        key_id, _, _ = RazorpayService.get_credentials()
+        data = {
+            "order_id": payment.razorpay_order_id,
+            "amount": payment.amount,
+            "amount_paise": int(payment.amount * 100),
+            "currency": payment.currency,
+            "key_id": key_id,
+            "survey_id": survey.id,
+            "survey_title": survey.title,
+        }
+        return Response(data, status=status.HTTP_200_OK)
+
+
+class SurveyVerifyPaymentView(APIView):
+    """
+    Verifies the Razorpay payment signature and marks the survey as paid.
+    """
+
+    permission_classes = [permissions.IsAuthenticated, IsSurveyOwnerOrStaff]
+
+    @extend_schema(
+        tags=["Surveys - Payments"],
+        summary="Verify Razorpay payment signature and mark survey as paid",
+        request=SurveyPaymentVerifySerializer,
+        responses={
+            status.HTTP_200_OK: OpenApiResponse(description="Payment verified successfully."),
+            status.HTTP_400_BAD_REQUEST: OpenApiResponse(description="Signature verification failed."),
+        },
+    )
+    def post(self, request: Request, id: str) -> Response:
+        survey = get_object_or_404(Survey, id=id)
+        self.check_object_permissions(request, survey)
+
+        serializer = SurveyPaymentVerifySerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        try:
+            payment = RazorpayService.verify_payment(
+                survey=survey,
+                user=request.user,
+                razorpay_order_id=serializer.validated_data["razorpay_order_id"],
+                razorpay_payment_id=serializer.validated_data["razorpay_payment_id"],
+                razorpay_signature=serializer.validated_data["razorpay_signature"],
+            )
+        except DjangoValidationError as exc:
+            return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+
+        return Response(
+            {
+                "status": "success",
+                "message": "Payment verified successfully. You can now publish your survey.",
+                "survey_id": str(survey.id),
+                "is_paid": True,
+                "payment_id": payment.razorpay_payment_id,
+            },
+            status=status.HTTP_200_OK,
+        )
+
+
+class RazorpayWebhookView(APIView):
+    """
+    Asynchronous Webhook listener called directly by Razorpay servers.
+    Verifies X-Razorpay-Signature and marks payments/surveys as paid.
+    """
+
+    permission_classes = [permissions.AllowAny]
+    authentication_classes = []  # No JWT needed from Razorpay server
+
+    @extend_schema(
+        tags=["Surveys - Payments"],
+        summary="Razorpay server-to-server webhook callback",
+        request=None,
+        responses={
+            status.HTTP_200_OK: OpenApiResponse(description="Webhook processed successfully."),
+            status.HTTP_400_BAD_REQUEST: OpenApiResponse(description="Signature verification failed."),
+        },
+    )
+    def post(self, request: Request, *args: Any, **kwargs: Any) -> Response:
+        signature = request.headers.get("X-Razorpay-Signature") or request.META.get("HTTP_X_RAZORPAY_SIGNATURE", "")
+        if not signature:
+            return Response({"detail": "Missing X-Razorpay-Signature header."}, status=status.HTTP_400_BAD_REQUEST)
+
+        raw_body = getattr(request, "_request", request).body
+
+        try:
+            result = RazorpayService.process_webhook_event(raw_body=raw_body, received_signature=signature)
+        except DjangoValidationError as exc:
+            return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+
+        return Response({"status": "ok", "result": result}, status=status.HTTP_200_OK)
+
+
 
 
 class SurveyCloseView(APIView):

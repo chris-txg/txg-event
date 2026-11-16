@@ -1,5 +1,6 @@
 from django.contrib import admin
-from survey.models import Answer, Question, QuestionChoice, Survey, SurveyResponse
+from survey.models import Answer, Question, QuestionChoice, Survey, SurveyPayment, SurveyResponse
+
 
 
 class QuestionChoiceInline(admin.TabularInline):
@@ -28,6 +29,7 @@ class SurveyAdmin(admin.ModelAdmin):
         "id",
         "title",
         "status",
+        "is_paid",
         "visibility",
         "allow_anonymous",
         "duplicate_rule",
@@ -35,7 +37,7 @@ class SurveyAdmin(admin.ModelAdmin):
         "response_count",
         "created_at",
     )
-    list_filter = ("status", "visibility", "allow_anonymous", "duplicate_rule")
+    list_filter = ("status", "is_paid", "visibility", "allow_anonymous", "duplicate_rule")
     search_fields = ("title", "description", "created_by__username", "created_by__email")
     readonly_fields = ("id", "created_at", "updated_at", "response_count")
     ordering = ("-created_at",)
@@ -52,9 +54,10 @@ class SurveyAdmin(admin.ModelAdmin):
         ),
         (
             "Publishing & Access Controls",
-            {"fields": ("status", "visibility", "allow_anonymous", "duplicate_rule", "start_date", "end_date")},
+            {"fields": ("status", "is_paid", "visibility", "allow_anonymous", "duplicate_rule", "start_date", "end_date")},
         ),
     )
+
 
 
 @admin.register(Question)
@@ -79,3 +82,27 @@ class SurveyResponseAdmin(admin.ModelAdmin):
 class AnswerAdmin(admin.ModelAdmin):
     list_display = ("id", "response", "question", "value")
     readonly_fields = ("id",)
+
+
+@admin.register(SurveyPayment)
+class SurveyPaymentAdmin(admin.ModelAdmin):
+    list_display = (
+        "id",
+        "survey",
+        "user",
+        "razorpay_order_id",
+        "razorpay_payment_id",
+        "amount",
+        "currency",
+        "status",
+        "created_at",
+    )
+    list_filter = ("status", "currency", "created_at")
+    search_fields = (
+        "razorpay_order_id",
+        "razorpay_payment_id",
+        "survey__title",
+        "user__username",
+    )
+    readonly_fields = ("id", "created_at", "updated_at")
+

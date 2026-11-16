@@ -8,12 +8,15 @@ from survey.views import (
     QuestionChoiceDetailView,
     QuestionDetailView,
     QuestionListCreateView,
+    RazorpayWebhookView,
     SurveyAnalyticsView,
     SurveyCloseView,
+    SurveyCreatePaymentOrderView,
     SurveyDetailView,
     SurveyListCreateView,
     SurveyPublishView,
     SurveyResponsesListView,
+    SurveyVerifyPaymentView,
 )
 
 urlpatterns = [
@@ -26,6 +29,15 @@ urlpatterns = [
     path("api/surveys/<uuid:id>/", SurveyDetailView.as_view(), name="survey_detail"),
     path("api/surveys/<uuid:id>/publish/", SurveyPublishView.as_view(), name="survey_publish"),
     path("api/surveys/<uuid:id>/close/", SurveyCloseView.as_view(), name="survey_close"),
+
+    # -------------------------------------------------------------
+    # Razorpay Payment APIs & Webhook
+    # -------------------------------------------------------------
+    path("api/surveys/<uuid:id>/payment/order/", SurveyCreatePaymentOrderView.as_view(), name="survey_payment_order"),
+    path("api/surveys/<uuid:id>/payment/verify/", SurveyVerifyPaymentView.as_view(), name="survey_payment_verify"),
+    path("api/payments/razorpay/webhook/", RazorpayWebhookView.as_view(), name="razorpay_webhook"),
+
+
 
     # -------------------------------------------------------------
     # Question & Choice Management

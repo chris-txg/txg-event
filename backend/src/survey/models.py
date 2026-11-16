@@ -61,6 +61,11 @@ class Survey(models.Model):
     )
     start_date = models.DateTimeField(null=True, blank=True)
     end_date = models.DateTimeField(null=True, blank=True)
+    is_paid = models.BooleanField(
+        default=False,
+        db_index=True,
+        help_text="Indicates whether the required publishing fee has been paid.",
+    )
     created_at = models.DateTimeField(auto_now_add=True, db_index=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -70,6 +75,7 @@ class Survey(models.Model):
             models.Index(fields=["status", "visibility"]),
             models.Index(fields=["created_by", "status"]),
             models.Index(fields=["project", "status"]),
+            models.Index(fields=["created_by", "is_paid"]),
         ]
 
     def __str__(self) -> str:
@@ -222,3 +228,51 @@ class Answer(models.Model):
 
     def __str__(self) -> str:
         return f"Answer for Q: {self.question_id} in Response: {self.response_id}"
+
+
+class SurveyPayment(models.Model):
+    class Status(models.TextChoices):
+        PENDING = "pending", "Pending"
+        SUCCESS = "success", "Success"
+        FAILED = "failed", "Failed"
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    survey = models.ForeignKey(
+        Survey,
+        on_delete=models.CASCADE,
+        related_name="payments",
+        db_index=True,
+    )
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="survey_payments",
+        db_index=True,
+    )
+    razorpay_order_id = models.CharField(max_length=100, unique=True, db_index=True)
+    razorpay_payment_id = models.CharField(max_length=100, blank=True, null=True, db_index=True)
+    razorpay_signature = models.CharField(max_length=255, blank=True, null=True)
+    amount = models.DecimalField(max_digits=10, decimal_places=2, help_text="Amount in INR")
+    currency = models.CharField(max_length=10, default="INR")
+    status = models.CharField(
+        max_length=20,
+        choices=Status.choices,
+        default=Status.PENDING,
+        db_index=True,
+    )
+    error_code = models.CharField(max_length=100, blank=True, null=True)
+    error_description = models.TextField(blank=True, null=True)
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+        indexes = [
+            models.Index(fields=["survey", "status"]),
+            models.Index(fields=["user", "status"]),
+            models.Index(fields=["razorpay_order_id"]),
+        ]
+
+    def __str__(self) -> str:
+        return f"Payment {self.id} for Survey '{self.survey_id}' - {self.status}"
+
