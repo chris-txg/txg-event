@@ -8,7 +8,10 @@ export function proxy(request: NextRequest) {
     request.cookies.has(COOKIE_NAMES.SESSION_ACTIVE) ||
     request.cookies.has(COOKIE_NAMES.ACCESS_TOKEN);
 
-  const isProtectedPath = pathname.startsWith('/profile');
+  const isProtectedPath =
+    pathname.startsWith('/profile') ||
+    pathname.startsWith('/services') ||
+    pathname.startsWith('/projects');
   const isAuthPath =
     pathname.startsWith('/login') ||
     pathname.startsWith('/register') ||
@@ -22,7 +25,7 @@ export function proxy(request: NextRequest) {
   }
 
   if (isAuthPath && hasSession) {
-    return NextResponse.redirect(new URL('/profile', request.url));
+    return NextResponse.redirect(new URL('/services', request.url));
   }
 
   return NextResponse.next();
@@ -35,6 +38,8 @@ export { proxy as middleware };
 export const config = {
   matcher: [
     '/profile/:path*',
+    '/services/:path*',
+    '/projects/:path*',
     '/login',
     '/register/:path*',
     '/forgot-password',

@@ -1,0 +1,55 @@
+import { NextRequest, NextResponse } from 'next/server';
+import { djangoFetch } from '@/lib/api/django-client';
+
+export async function GET(request: NextRequest) {
+  try {
+    const { searchParams } = new URL(request.url);
+    const queryString = searchParams.toString();
+    const endpoint = `/api/projects/${queryString ? `?${queryString}` : ''}`;
+
+    const res = await djangoFetch(endpoint, {
+      method: 'GET',
+      requiresAuth: true,
+    });
+
+    return NextResponse.json(res.data, { status: res.status });
+  } catch (error) {
+    return NextResponse.json(
+      { detail: error instanceof Error ? error.message : 'Internal Server Error' },
+      { status: 500 }
+    );
+  }
+}
+
+export async function POST(request: NextRequest) {
+  try {
+    const contentType = request.headers.get('content-type') || '';
+
+    if (contentType.includes('multipart/form-data')) {
+      const formData = await request.formData();
+
+      const res = await djangoFetch('/api/projects/', {
+        method: 'POST',
+        requiresAuth: true,
+        body: formData,
+      });
+
+      return NextResponse.json(res.data, { status: res.status });
+    } else {
+      const jsonBody = await request.json();
+
+      const res = await djangoFetch('/api/projects/', {
+        method: 'POST',
+        requiresAuth: true,
+        body: JSON.stringify(jsonBody),
+      });
+
+      return NextResponse.json(res.data, { status: res.status });
+    }
+  } catch (error) {
+    return NextResponse.json(
+      { detail: error instanceof Error ? error.message : 'Internal Server Error' },
+      { status: 500 }
+    );
+  }
+}
