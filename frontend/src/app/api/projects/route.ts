@@ -12,7 +12,8 @@ export async function GET(request: NextRequest) {
       requiresAuth: true,
     });
 
-    return NextResponse.json(res.data, { status: res.status });
+    const payload = res.ok ? res.data : (res.error ?? { detail: 'Failed to fetch projects' });
+    return NextResponse.json(payload, { status: res.status });
   } catch (error) {
     return NextResponse.json(
       { detail: error instanceof Error ? error.message : 'Internal Server Error' },
@@ -34,7 +35,8 @@ export async function POST(request: NextRequest) {
         body: formData,
       });
 
-      return NextResponse.json(res.data, { status: res.status });
+      const payload = res.ok ? res.data : (res.error ?? { detail: 'Failed to create project' });
+      return NextResponse.json(payload, { status: res.status });
     } else {
       const jsonBody = await request.json();
 
@@ -44,7 +46,8 @@ export async function POST(request: NextRequest) {
         body: JSON.stringify(jsonBody),
       });
 
-      return NextResponse.json(res.data, { status: res.status });
+      const payload = res.ok ? res.data : (res.error ?? { detail: 'Failed to create project' });
+      return NextResponse.json(payload, { status: res.status });
     }
   } catch (error) {
     return NextResponse.json(

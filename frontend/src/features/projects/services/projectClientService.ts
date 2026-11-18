@@ -28,4 +28,17 @@ export const projectClientService = {
       body: formData,
     });
   },
+
+  async updateProject(id: string, formData: FormData): Promise<BffResponse<EventProjectDetail>> {
+    return bffFetch<EventProjectDetail>(`/api/projects/${id}`, {
+      method: 'PATCH',
+      body: formData,
+    });
+  },
+
+  async deleteDocument(projectId: string, documentId: string): Promise<BffResponse<unknown>> {
+    return bffFetch<unknown>(`/api/projects/${projectId}/documents/${documentId}`, {
+      method: 'DELETE',
+    });
+  },
 };

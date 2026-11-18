@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, Suspense } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import { useQuery } from '@tanstack/react-query';
@@ -12,23 +12,17 @@ import {
   MapPin,
   Clock,
   Building,
-  Mail,
-  Phone,
-  Globe,
   FileText,
   Download,
   AlertCircle,
   FileCheck,
-  CheckCircle2,
   Info,
   Layers,
-  PieChart,
-  BarChart3,
-  Users,
+  Edit3,
 } from 'lucide-react';
 import { Spinner } from '@/components/ui/Spinner';
 
-export default function ProjectWorkspacePage() {
+function ProjectWorkspaceContent() {
   const params = useParams();
   const id = params?.id as string;
 
@@ -135,8 +129,17 @@ export default function ProjectWorkspacePage() {
           </div>
         </div>
 
-        <div className="flex items-center gap-2 text-xs text-[#75666D]">
-          <span>Created on {new Date(project.created_at).toLocaleDateString()}</span>
+        <div className="flex items-center gap-3">
+          <span className="text-xs text-[#75666D] hidden md:inline">
+            Created on {new Date(project.created_at).toLocaleDateString()}
+          </span>
+          <Link
+            href={`/projects/${project.id}/edit`}
+            className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-white border border-[#E9DDE1] text-stone-700 hover:bg-[#F8EFF2] hover:text-[#762D46] text-xs font-semibold shadow-xs transition-colors"
+          >
+            <Edit3 className="w-3.5 h-3.5" />
+            <span>{project.status === 'draft' ? 'Continue Draft' : 'Edit Project'}</span>
+          </Link>
         </div>
       </div>
 
@@ -432,5 +435,20 @@ export default function ProjectWorkspacePage() {
         </div>
       )}
     </div>
+  );
+}
+
+export default function ProjectWorkspacePage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="py-24 flex flex-col items-center justify-center">
+          <Spinner size="lg" />
+          <p className="text-sm font-medium text-[#75666D] mt-3">Loading project workspace...</p>
+        </div>
+      }
+    >
+      <ProjectWorkspaceContent />
+    </Suspense>
   );
 }

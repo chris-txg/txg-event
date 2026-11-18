@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import {
@@ -19,6 +19,12 @@ export function DashboardSidebar() {
   const pathname = usePathname();
   const [servicesExpanded, setServicesExpanded] = useState(true);
   const [modalFeature, setModalFeature] = useState<string | null>(null);
+  const [currentYear, setCurrentYear] = useState<string>('');
+
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setCurrentYear(String(new Date().getFullYear()));
+  }, []);
 
   const isServicesActive = pathname.startsWith('/services');
   const isResearchSurveysActive = pathname === '/services/research-surveys';
@@ -148,7 +154,7 @@ export function DashboardSidebar() {
         </div>
 
         <div className="px-3 py-3 border-t border-[#5C2337] text-[11px] text-stone-400">
-          TecnolynxGlobal &copy; {new Date().getFullYear()}
+          TecnolynxGlobal &copy; {currentYear}
         </div>
       </aside>
 
