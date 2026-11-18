@@ -180,6 +180,15 @@ class SurveyPublishView(APIView):
         survey = get_object_or_404(Survey, id=id)
         self.check_object_permissions(request, survey)
 
+        if survey.status == Survey.Status.CLOSED:
+            return Response(
+                {
+                    "detail": "This survey is closed and cannot be reopened or republished.",
+                    "code": "SURVEY_CLOSED",
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
         if not survey.is_paid:
             return Response(
                 {
@@ -217,6 +226,15 @@ class SurveyCreatePaymentOrderView(APIView):
     def post(self, request: Request, id: str) -> Response:
         survey = get_object_or_404(Survey, id=id)
         self.check_object_permissions(request, survey)
+
+        if survey.status == Survey.Status.CLOSED:
+            return Response(
+                {
+                    "detail": "Cannot create payment order for a closed survey.",
+                    "code": "SURVEY_CLOSED",
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
 
         if survey.is_paid:
             return Response(
@@ -376,6 +394,12 @@ class QuestionDetailView(APIView):
     def patch(self, request: Request, id: str) -> Response:
         question = get_object_or_404(Question.objects.select_related("survey"), id=id)
         self.check_object_permissions(request, question)
+
+        if not question.survey.can_edit_structure():
+            return Response(
+                {"detail": "Cannot modify questions for a closed survey or one with responses."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
 
         serializer = QuestionSerializer(question, data=request.data, partial=True)
         serializer.is_valid(raise_exception=True)

@@ -106,8 +106,10 @@ class Survey(models.Model):
 
     def can_edit_structure(self) -> bool:
         """
-        Returns False if survey already has submitted responses to preserve data integrity.
+        Returns False if survey is closed or already has submitted responses to preserve data integrity.
         """
+        if self.status == self.Status.CLOSED:
+            return False
         return not self.responses.exists()
 
 

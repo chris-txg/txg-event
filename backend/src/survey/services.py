@@ -24,6 +24,9 @@ User = get_user_model()
 class SurveyService:
     @staticmethod
     def publish_survey(survey: Survey) -> Survey:
+        if survey.status == Survey.Status.CLOSED:
+            raise ValidationError("This survey is closed and cannot be reopened or republished.")
+
         if not survey.is_paid:
             raise ValidationError("Payment is required before publishing this survey. Please complete payment first.")
 

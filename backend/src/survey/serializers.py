@@ -172,7 +172,22 @@ class SurveyCreateUpdateSerializer(serializers.ModelSerializer):
                 raise serializers.ValidationError("You can only create surveys for your own Event Projects.")
         return value
 
+    def validate_status(self, value: str) -> str:
+        if self.instance and self.instance.status == Survey.Status.CLOSED and value != Survey.Status.CLOSED:
+            raise serializers.ValidationError("Cannot change the status of a closed survey.")
+
+        if value == Survey.Status.PUBLISHED:
+            is_paid = getattr(self.instance, "is_paid", False) if self.instance else False
+            if not is_paid:
+                raise serializers.ValidationError(
+                    "Cannot set status to 'published' without payment. Please complete payment and use the publish endpoint."
+                )
+        return value
+
     def validate(self, attrs: dict[str, Any]) -> dict[str, Any]:
+        if self.instance and self.instance.status == Survey.Status.CLOSED:
+            raise serializers.ValidationError("Cannot modify a closed survey. It is finalized.")
+
         start = attrs.get("start_date", getattr(self.instance, "start_date", None))
         end = attrs.get("end_date", getattr(self.instance, "end_date", None))
         if start and end and start > end:
