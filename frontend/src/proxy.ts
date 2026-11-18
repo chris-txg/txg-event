@@ -19,13 +19,16 @@ export function proxy(request: NextRequest) {
     pathname.startsWith('/reset-password');
 
   if (isProtectedPath && !hasSession) {
-    const loginUrl = new URL('/login', request.url);
+    const loginUrl = request.nextUrl.clone();
+    loginUrl.pathname = '/login';
     loginUrl.searchParams.set('redirect', pathname);
     return NextResponse.redirect(loginUrl);
   }
 
   if (isAuthPath && hasSession) {
-    return NextResponse.redirect(new URL('/services', request.url));
+    const servicesUrl = request.nextUrl.clone();
+    servicesUrl.pathname = '/services';
+    return NextResponse.redirect(servicesUrl);
   }
 
   return NextResponse.next();

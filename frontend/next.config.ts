@@ -1,7 +1,11 @@
 import type { NextConfig } from "next";
 
+const basePath = process.env.NEXT_PUBLIC_BASE_PATH !== undefined
+  ? process.env.NEXT_PUBLIC_BASE_PATH
+  : '/txgevent';
+
 const nextConfig: NextConfig = {
-  /* config options here */
+  basePath: basePath || undefined,
   cacheComponents: true,
   partialPrefetching: true,
   reactCompiler: true,

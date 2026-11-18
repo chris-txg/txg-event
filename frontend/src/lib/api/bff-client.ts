@@ -5,6 +5,25 @@ export interface BffResponse<T = unknown> {
   error?: unknown;
 }
 
+const BASE_PATH = process.env.NEXT_PUBLIC_BASE_PATH !== undefined
+  ? process.env.NEXT_PUBLIC_BASE_PATH
+  : '/txgevent';
+
+function resolveBffUrl(endpoint: string): string {
+  if (endpoint.startsWith('http://') || endpoint.startsWith('https://')) {
+    return endpoint;
+  }
+  const cleanBase = BASE_PATH.endsWith('/') ? BASE_PATH.slice(0, -1) : BASE_PATH;
+  if (!cleanBase) {
+    return endpoint;
+  }
+  if (endpoint === cleanBase || endpoint.startsWith(`${cleanBase}/`)) {
+    return endpoint;
+  }
+  const cleanEndpoint = endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
+  return `${cleanBase}${cleanEndpoint}`;
+}
+
 export async function bffFetch<T = unknown>(
   endpoint: string,
   options: RequestInit = {}
@@ -19,8 +38,10 @@ export async function bffFetch<T = unknown>(
     headers.set('Accept', 'application/json');
   }
 
+  const targetUrl = resolveBffUrl(endpoint);
+
   try {
-    const response = await fetch(endpoint, {
+    const response = await fetch(targetUrl, {
       ...restOptions,
       headers,
       credentials: 'same-origin',
