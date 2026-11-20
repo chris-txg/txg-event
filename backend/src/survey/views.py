@@ -10,18 +10,21 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from accounts.services import get_client_ip
-from survey.models import Answer, Question, QuestionChoice, Survey, SurveyResponse
+from survey.models import Answer, Question, QuestionChoice, Survey, SurveyPricingOption, SurveyResponse
 from survey.permissions import IsSurveyOwnerOrStaff
 from survey.serializers import (
     AnswerDetailSerializer,
     QuestionChoiceSerializer,
     QuestionCreateSerializer,
     QuestionSerializer,
+    SurveyCreatePaymentOrderRequestSerializer,
     SurveyCreateUpdateSerializer,
     SurveyDetailSerializer,
     SurveyListSerializer,
     SurveyPaymentOrderResponseSerializer,
     SurveyPaymentVerifySerializer,
+    SurveyPricingOptionSerializer,
+    SurveyPublishRequestSerializer,
     SurveyResponseDetailSerializer,
     SurveySubmitSerializer,
 )
@@ -163,17 +166,34 @@ class SurveyDetailView(generics.RetrieveUpdateDestroyAPIView):
         return super().delete(request, *args, **kwargs)
 
 
+class SurveyPricingOptionsListView(APIView):
+    """
+    Returns all active pricing options, including free tier availability and remaining limits for the user.
+    """
+    permission_classes = [permissions.AllowAny]
+
+    @extend_schema(
+        tags=["Surveys - Payments"],
+        summary="List active pricing options for publishing surveys",
+        responses={status.HTTP_200_OK: SurveyPricingOptionSerializer(many=True)},
+    )
+    def get(self, request: Request) -> Response:
+        plans = SurveyPricingOption.objects.filter(is_active=True).order_by("display_order", "price")
+        serializer = SurveyPricingOptionSerializer(plans, many=True, context={"request": request})
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
+
 class SurveyPublishView(APIView):
     permission_classes = [permissions.IsAuthenticated, IsSurveyOwnerOrStaff]
 
     @extend_schema(
         tags=["Surveys - Management"],
-        summary="Publish a survey (Opens it for responses - requires completed payment)",
-        request=None,
+        summary="Publish a survey (Supports active free tier with user limit or requires completed payment)",
+        request=SurveyPublishRequestSerializer,
         responses={
             status.HTTP_200_OK: OpenApiResponse(description="Survey published successfully."),
-            status.HTTP_400_BAD_REQUEST: OpenApiResponse(description="Cannot publish without questions."),
-            status.HTTP_402_PAYMENT_REQUIRED: OpenApiResponse(description="Payment required before publishing."),
+            status.HTTP_400_BAD_REQUEST: OpenApiResponse(description="Validation error or cannot publish without questions."),
+            status.HTTP_402_PAYMENT_REQUIRED: OpenApiResponse(description="Payment required or free limit reached."),
         },
     )
     def post(self, request: Request, id: str) -> Response:
@@ -189,35 +209,60 @@ class SurveyPublishView(APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        if not survey.is_paid:
-            return Response(
-                {
-                    "detail": "Payment is required before publishing this survey. Please complete payment first.",
-                    "code": "PAYMENT_REQUIRED",
-                    "survey_id": str(survey.id),
-                    "payment_order_url": f"/api/surveys/{survey.id}/payment/order/",
-                },
-                status=status.HTTP_402_PAYMENT_REQUIRED,
-            )
+        req_serializer = SurveyPublishRequestSerializer(data=request.data or {})
+        req_serializer.is_valid(raise_exception=True)
+        opt_code = req_serializer.validated_data.get("pricing_option_code")
+        opt_id = req_serializer.validated_data.get("pricing_option_id")
+
+        pricing_option = None
+        if opt_id:
+            pricing_option = get_object_or_404(SurveyPricingOption, id=opt_id)
+        elif opt_code:
+            pricing_option = get_object_or_404(SurveyPricingOption, code=opt_code)
+        elif not survey.is_paid:
+            # Check if there is an active free plan available
+            pricing_option = SurveyPricingOption.objects.filter(is_active=True, is_free=True).first()
 
         try:
-            SurveyService.publish_survey(survey)
+            SurveyService.publish_survey(survey, pricing_option=pricing_option)
         except DjangoValidationError as exc:
-            return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
-        return Response({"message": f"Survey '{survey.title}' is now published and active."}, status=status.HTTP_200_OK)
+            msg = exc.messages[0] if hasattr(exc, "messages") else str(exc)
+            if "limit" in msg.lower() or "payment is required" in msg.lower():
+                return Response(
+                    {
+                        "detail": msg,
+                        "code": "PAYMENT_REQUIRED",
+                        "survey_id": str(survey.id),
+                        "payment_order_url": f"/api/surveys/{survey.id}/payment/order/",
+                        "pricing_options_url": "/api/surveys/pricing-options/",
+                    },
+                    status=status.HTTP_402_PAYMENT_REQUIRED,
+                )
+            return Response({"detail": msg}, status=status.HTTP_400_BAD_REQUEST)
+
+        plan_name = survey.pricing_option.name if survey.pricing_option else "Standard"
+        return Response(
+            {
+                "message": f"Survey '{survey.title}' is now published and active under the '{plan_name}' plan.",
+                "status": survey.status,
+                "is_paid": survey.is_paid,
+                "pricing_option": survey.pricing_option.code if survey.pricing_option else None,
+            },
+            status=status.HTTP_200_OK,
+        )
 
 
 class SurveyCreatePaymentOrderView(APIView):
     """
-    Creates a Razorpay payment order for the survey publishing fee.
+    Creates a Razorpay payment order for the selected survey publishing pricing option.
     """
 
     permission_classes = [permissions.IsAuthenticated, IsSurveyOwnerOrStaff]
 
     @extend_schema(
         tags=["Surveys - Payments"],
-        summary="Create a Razorpay order to pay the survey publishing fee",
-        request=None,
+        summary="Create a Razorpay order to pay for a selected pricing option",
+        request=SurveyCreatePaymentOrderRequestSerializer,
         responses={
             status.HTTP_200_OK: SurveyPaymentOrderResponseSerializer,
             status.HTTP_400_BAD_REQUEST: OpenApiResponse(description="Survey already paid or error."),
@@ -242,8 +287,26 @@ class SurveyCreatePaymentOrderView(APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
+        req_serializer = SurveyCreatePaymentOrderRequestSerializer(data=request.data or {})
+        req_serializer.is_valid(raise_exception=True)
+        opt_code = req_serializer.validated_data.get("pricing_option_code")
+        opt_id = req_serializer.validated_data.get("pricing_option_id")
+
+        pricing_option = None
+        if opt_id:
+            pricing_option = get_object_or_404(SurveyPricingOption, id=opt_id)
+        elif opt_code:
+            pricing_option = get_object_or_404(SurveyPricingOption, code=opt_code)
+        else:
+            # Default to first active paid plan
+            pricing_option = SurveyPricingOption.objects.filter(is_active=True, is_free=False).first()
+
         try:
-            payment = RazorpayService.create_order(survey=survey, user=request.user)
+            payment = RazorpayService.create_order(
+                survey=survey,
+                user=request.user,
+                pricing_option=pricing_option,
+            )
         except DjangoValidationError as exc:
             return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
 
@@ -256,6 +319,7 @@ class SurveyCreatePaymentOrderView(APIView):
             "key_id": key_id,
             "survey_id": survey.id,
             "survey_title": survey.title,
+            "pricing_option_name": pricing_option.name if pricing_option else "Standard Plan",
         }
         return Response(data, status=status.HTTP_200_OK)
 

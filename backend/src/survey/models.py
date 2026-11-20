@@ -6,6 +6,52 @@ from django.db import models
 from django.utils import timezone
 
 
+class SurveyPricingOption(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    name = models.CharField(max_length=100, help_text="Plan display name, e.g. Free Tier, Standard, Pro")
+    code = models.SlugField(max_length=50, unique=True, help_text="Unique slug identifier, e.g. 'free', 'standard', 'pro'")
+    description = models.TextField(blank=True, help_text="Plan features and marketing highlights")
+    price = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        default=0.00,
+        help_text="Price in INR (0.00 for free)",
+    )
+    currency = models.CharField(max_length=10, default="INR")
+    is_free = models.BooleanField(
+        default=False,
+        db_index=True,
+        help_text="If True, bypasses Razorpay checkout",
+    )
+    free_limit_per_user = models.PositiveIntegerField(
+        default=1,
+        help_text="Maximum times a single user can publish with this free plan",
+    )
+    is_active = models.BooleanField(
+        default=True,
+        db_index=True,
+        help_text="Controls whether this pricing option is visible and available for selection",
+    )
+    display_order = models.PositiveIntegerField(default=0, help_text="Ordering in frontend UI")
+    features = models.JSONField(
+        default=list,
+        blank=True,
+        help_text="List of feature bullet points for frontend display",
+    )
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["display_order", "price", "-created_at"]
+        indexes = [
+            models.Index(fields=["is_active", "is_free"]),
+            models.Index(fields=["code"]),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.name} ({self.code}) - {self.currency} {self.price} ({'Active' if self.is_active else 'Inactive'})"
+
+
 class Survey(models.Model):
     class Status(models.TextChoices):
         DRAFT = "draft", "Draft"
@@ -66,6 +112,15 @@ class Survey(models.Model):
         db_index=True,
         help_text="Indicates whether the required publishing fee has been paid.",
     )
+    pricing_option = models.ForeignKey(
+        SurveyPricingOption,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="surveys",
+        db_index=True,
+        help_text="Pricing tier chosen when published.",
+    )
     created_at = models.DateTimeField(auto_now_add=True, db_index=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -76,6 +131,7 @@ class Survey(models.Model):
             models.Index(fields=["created_by", "status"]),
             models.Index(fields=["project", "status"]),
             models.Index(fields=["created_by", "is_paid"]),
+            models.Index(fields=["pricing_option", "status"]),
         ]
 
     def __str__(self) -> str:
@@ -250,6 +306,15 @@ class SurveyPayment(models.Model):
         on_delete=models.CASCADE,
         related_name="survey_payments",
         db_index=True,
+    )
+    pricing_option = models.ForeignKey(
+        SurveyPricingOption,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="payments",
+        db_index=True,
+        help_text="Pricing tier associated with this payment.",
     )
     razorpay_order_id = models.CharField(max_length=100, unique=True, db_index=True)
     razorpay_payment_id = models.CharField(max_length=100, blank=True, null=True, db_index=True)

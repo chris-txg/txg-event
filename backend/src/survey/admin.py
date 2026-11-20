@@ -1,5 +1,25 @@
 from django.contrib import admin
-from survey.models import Answer, Question, QuestionChoice, Survey, SurveyPayment, SurveyResponse
+from survey.models import Answer, Question, QuestionChoice, Survey, SurveyPayment, SurveyPricingOption, SurveyResponse
+
+
+@admin.register(SurveyPricingOption)
+class SurveyPricingOptionAdmin(admin.ModelAdmin):
+    list_display = (
+        "id",
+        "name",
+        "code",
+        "price",
+        "currency",
+        "is_free",
+        "free_limit_per_user",
+        "is_active",
+        "display_order",
+        "created_at",
+    )
+    list_filter = ("is_active", "is_free")
+    search_fields = ("name", "code", "description")
+    list_editable = ("is_active", "price", "display_order", "free_limit_per_user")
+    ordering = ("display_order", "price")
 
 
 
@@ -30,6 +50,7 @@ class SurveyAdmin(admin.ModelAdmin):
         "title",
         "status",
         "is_paid",
+        "pricing_option",
         "visibility",
         "allow_anonymous",
         "duplicate_rule",
@@ -37,7 +58,7 @@ class SurveyAdmin(admin.ModelAdmin):
         "response_count",
         "created_at",
     )
-    list_filter = ("status", "is_paid", "visibility", "allow_anonymous", "duplicate_rule")
+    list_filter = ("status", "is_paid", "pricing_option", "visibility", "allow_anonymous", "duplicate_rule")
     search_fields = ("title", "description", "created_by__username", "created_by__email")
     readonly_fields = ("id", "created_at", "updated_at", "response_count")
     ordering = ("-created_at",)
@@ -54,7 +75,7 @@ class SurveyAdmin(admin.ModelAdmin):
         ),
         (
             "Publishing & Access Controls",
-            {"fields": ("status", "is_paid", "visibility", "allow_anonymous", "duplicate_rule", "start_date", "end_date")},
+            {"fields": ("status", "is_paid", "pricing_option", "visibility", "allow_anonymous", "duplicate_rule", "start_date", "end_date")},
         ),
     )
 
@@ -90,6 +111,7 @@ class SurveyPaymentAdmin(admin.ModelAdmin):
         "id",
         "survey",
         "user",
+        "pricing_option",
         "razorpay_order_id",
         "razorpay_payment_id",
         "amount",
@@ -97,7 +119,7 @@ class SurveyPaymentAdmin(admin.ModelAdmin):
         "status",
         "created_at",
     )
-    list_filter = ("status", "currency", "created_at")
+    list_filter = ("status", "pricing_option", "currency", "created_at")
     search_fields = (
         "razorpay_order_id",
         "razorpay_payment_id",

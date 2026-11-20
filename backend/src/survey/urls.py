@@ -14,6 +14,7 @@ from survey.views import (
     SurveyCreatePaymentOrderView,
     SurveyDetailView,
     SurveyListCreateView,
+    SurveyPricingOptionsListView,
     SurveyPublishView,
     SurveyResponsesListView,
     SurveyVerifyPaymentView,
@@ -24,7 +25,8 @@ urlpatterns = [
     # Survey Management (Creator / Admin)
     # -------------------------------------------------------------
     path("api/surveys/", SurveyListCreateView.as_view(), name="survey_list_create"),
-    # Note: my-submissions must precede <uuid:id> to avoid route collision
+    # Note: static paths must precede <uuid:id> to avoid route collision
+    path("api/surveys/pricing-options/", SurveyPricingOptionsListView.as_view(), name="survey_pricing_options"),
     path("api/surveys/my-submissions/", MySubmissionsListView.as_view(), name="survey_my_submissions"),
     path("api/surveys/<uuid:id>/", SurveyDetailView.as_view(), name="survey_detail"),
     path("api/surveys/<uuid:id>/publish/", SurveyPublishView.as_view(), name="survey_publish"),

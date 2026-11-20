@@ -1,12 +1,65 @@
 from datetime import date
-from typing import Any
+from typing import Any, Optional
 from django.db import transaction
 from django.utils import timezone
 from rest_framework import serializers
 
 from projects.models import EventProject
-from survey.models import Answer, Question, QuestionChoice, Survey, SurveyPayment, SurveyResponse
+from survey.models import Answer, Question, QuestionChoice, Survey, SurveyPayment, SurveyPricingOption, SurveyResponse
 
+
+class SurveyPricingOptionSerializer(serializers.ModelSerializer):
+    user_used_count = serializers.SerializerMethodField()
+    user_remaining_count = serializers.SerializerMethodField()
+    is_available_for_user = serializers.SerializerMethodField()
+
+    class Meta:
+        model = SurveyPricingOption
+        fields = [
+            "id",
+            "name",
+            "code",
+            "description",
+            "price",
+            "currency",
+            "is_free",
+            "free_limit_per_user",
+            "is_active",
+            "display_order",
+            "features",
+            "user_used_count",
+            "user_remaining_count",
+            "is_available_for_user",
+        ]
+
+    def _get_user(self) -> Optional[Any]:
+        request = self.context.get("request")
+        if request and request.user and request.user.is_authenticated:
+            return request.user
+        return None
+
+    def get_user_used_count(self, obj: SurveyPricingOption) -> int:
+        user = self._get_user()
+        if not user or not obj.is_free:
+            return 0
+        return Survey.objects.filter(
+            created_by=user,
+            pricing_option=obj,
+            status__in=[Survey.Status.PUBLISHED, Survey.Status.CLOSED],
+        ).count()
+
+    def get_user_remaining_count(self, obj: SurveyPricingOption) -> int:
+        if not obj.is_free:
+            return 999
+        used = self.get_user_used_count(obj)
+        return max(0, obj.free_limit_per_user - used)
+
+    def get_is_available_for_user(self, obj: SurveyPricingOption) -> bool:
+        if not obj.is_active:
+            return False
+        if not obj.is_free:
+            return True
+        return self.get_user_remaining_count(obj) > 0
 
 
 class QuestionChoiceSerializer(serializers.ModelSerializer):
@@ -76,6 +129,7 @@ class SurveyListSerializer(serializers.ModelSerializer):
     project_name = serializers.CharField(source="project.project_name", read_only=True, allow_null=True)
     is_active = serializers.BooleanField(read_only=True)
     response_count = serializers.IntegerField(read_only=True)
+    pricing_option = SurveyPricingOptionSerializer(read_only=True)
 
     class Meta:
         model = Survey
@@ -92,6 +146,7 @@ class SurveyListSerializer(serializers.ModelSerializer):
             "start_date",
             "end_date",
             "is_paid",
+            "pricing_option",
             "created_by_username",
             "is_active",
             "response_count",
@@ -105,6 +160,7 @@ class SurveyDetailSerializer(serializers.ModelSerializer):
     project_name = serializers.CharField(source="project.project_name", read_only=True, allow_null=True)
     is_active = serializers.BooleanField(read_only=True)
     response_count = serializers.IntegerField(read_only=True)
+    pricing_option = SurveyPricingOptionSerializer(read_only=True)
     questions = QuestionSerializer(many=True, read_only=True)
 
     class Meta:
@@ -122,6 +178,7 @@ class SurveyDetailSerializer(serializers.ModelSerializer):
             "start_date",
             "end_date",
             "is_paid",
+            "pricing_option",
             "created_by_username",
             "is_active",
             "response_count",
@@ -132,6 +189,7 @@ class SurveyDetailSerializer(serializers.ModelSerializer):
         read_only_fields = [
             "id",
             "is_paid",
+            "pricing_option",
             "created_by_username",
             "project_name",
             "is_active",
@@ -350,6 +408,33 @@ class SurveyPaymentOrderResponseSerializer(serializers.Serializer):
     key_id = serializers.CharField()
     survey_id = serializers.UUIDField()
     survey_title = serializers.CharField()
+    pricing_option_name = serializers.CharField(required=False, allow_blank=True)
+
+
+class SurveyPublishRequestSerializer(serializers.Serializer):
+    pricing_option_code = serializers.CharField(
+        required=False,
+        allow_blank=True,
+        help_text="Plan code, e.g. 'free' or 'standard'",
+    )
+    pricing_option_id = serializers.UUIDField(
+        required=False,
+        allow_null=True,
+        help_text="UUID of active SurveyPricingOption",
+    )
+
+
+class SurveyCreatePaymentOrderRequestSerializer(serializers.Serializer):
+    pricing_option_code = serializers.CharField(
+        required=False,
+        allow_blank=True,
+        help_text="Code of paid plan, e.g. 'standard' or 'pro'",
+    )
+    pricing_option_id = serializers.UUIDField(
+        required=False,
+        allow_null=True,
+        help_text="UUID of active paid SurveyPricingOption",
+    )
 
 
 class SurveyPaymentVerifySerializer(serializers.Serializer):

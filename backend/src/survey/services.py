@@ -15,7 +15,7 @@ from django.db import transaction
 from django.db.models import Avg, Count, Max, Min
 from django.utils import timezone
 
-from survey.models import Answer, Question, QuestionChoice, Survey, SurveyPayment, SurveyResponse
+from survey.models import Answer, Question, QuestionChoice, Survey, SurveyPayment, SurveyPricingOption, SurveyResponse
 
 logger = logging.getLogger(__name__)
 User = get_user_model()
@@ -23,20 +23,45 @@ User = get_user_model()
 
 class SurveyService:
     @staticmethod
-    def publish_survey(survey: Survey) -> Survey:
+    def publish_survey(
+        survey: Survey,
+        pricing_option: Optional[SurveyPricingOption] = None,
+    ) -> Survey:
         if survey.status == Survey.Status.CLOSED:
             raise ValidationError("This survey is closed and cannot be reopened or republished.")
-
-        if not survey.is_paid:
-            raise ValidationError("Payment is required before publishing this survey. Please complete payment first.")
 
         if not survey.questions.exists():
             raise ValidationError("Cannot publish a survey without questions. Please add questions first.")
 
+        if pricing_option:
+            if not pricing_option.is_active:
+                raise ValidationError(f"Pricing plan '{pricing_option.name}' is currently not active.")
+
+            if pricing_option.is_free:
+                used_free_count = Survey.objects.filter(
+                    created_by=survey.created_by,
+                    pricing_option=pricing_option,
+                    status__in=[Survey.Status.PUBLISHED, Survey.Status.CLOSED],
+                ).exclude(id=survey.id).count()
+
+                if used_free_count >= pricing_option.free_limit_per_user:
+                    raise ValidationError(
+                        f"You have already reached the limit of {pricing_option.free_limit_per_user} free survey(s) under '{pricing_option.name}'. Please choose a paid plan."
+                    )
+                survey.pricing_option = pricing_option
+                survey.is_paid = True
+            else:
+                if not survey.is_paid:
+                    raise ValidationError("Payment is required for this plan before publishing. Please complete payment first.")
+                survey.pricing_option = pricing_option
+        else:
+            if not survey.is_paid:
+                raise ValidationError("Payment is required before publishing this survey. Please complete payment or select an available free plan.")
+
         survey.status = Survey.Status.PUBLISHED
         if not survey.start_date:
             survey.start_date = timezone.now()
-        survey.save(update_fields=["status", "start_date", "updated_at"])
+        survey.save(update_fields=["status", "start_date", "is_paid", "pricing_option", "updated_at"])
         return survey
 
     @staticmethod
@@ -174,6 +199,7 @@ class RazorpayService:
         cls,
         survey: Survey,
         user: Any,
+        pricing_option: Optional[SurveyPricingOption] = None,
         amount_inr: Optional[Decimal] = None,
     ) -> SurveyPayment:
         """
@@ -183,7 +209,18 @@ class RazorpayService:
             raise ValidationError("This survey is already paid and ready to publish.")
 
         key_id, key_secret, default_fee = cls.get_credentials()
-        final_amount = amount_inr if amount_inr is not None else default_fee
+
+        if pricing_option:
+            if not pricing_option.is_active:
+                raise ValidationError(f"Pricing plan '{pricing_option.name}' is currently inactive.")
+            if pricing_option.is_free:
+                raise ValidationError("Cannot create a Razorpay payment order for a free plan. Use the publish endpoint.")
+            final_amount = pricing_option.price
+        elif amount_inr is not None:
+            final_amount = amount_inr
+        else:
+            final_amount = default_fee
+
         amount_paise = int(final_amount * 100)
 
         # Receipt identifier up to 40 chars
@@ -225,6 +262,7 @@ class RazorpayService:
         payment = SurveyPayment.objects.create(
             survey=survey,
             user=user,
+            pricing_option=pricing_option,
             razorpay_order_id=order_id,
             amount=final_amount,
             currency="INR",
@@ -294,7 +332,9 @@ class RazorpayService:
 
             locked_survey = Survey.objects.select_for_update().get(id=survey.id)
             locked_survey.is_paid = True
-            locked_survey.save(update_fields=["is_paid", "updated_at"])
+            if payment.pricing_option:
+                locked_survey.pricing_option = payment.pricing_option
+            locked_survey.save(update_fields=["is_paid", "pricing_option", "updated_at"])
 
         return payment
 
