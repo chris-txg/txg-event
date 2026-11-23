@@ -505,9 +505,20 @@ class RazorpayWebhookView(APIView):
             return Response({"detail": "Missing X-Razorpay-Signature header."}, status=status.HTTP_400_BAD_REQUEST)
 
         raw_body = getattr(request, "_request", request).body
+        client_ip = get_client_ip(request)
+        headers_dict = {
+            k: str(v)
+            for k, v in request.headers.items()
+            if k.lower() in ["x-razorpay-signature", "x-razorpay-event-id", "content-type", "user-agent"]
+        }
 
         try:
-            result = RazorpayService.process_webhook_event(raw_body=raw_body, received_signature=signature)
+            result = RazorpayService.process_webhook_event(
+                raw_body=raw_body,
+                received_signature=signature,
+                headers=headers_dict,
+                client_ip=client_ip,
+            )
         except DjangoValidationError as exc:
             return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
 

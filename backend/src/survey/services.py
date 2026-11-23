@@ -21,6 +21,7 @@ from survey.models import (
     CouponUsage,
     Question,
     QuestionChoice,
+    RazorpayWebhookLog,
     Survey,
     SurveyPayment,
     SurveyPricingOption,
@@ -491,39 +492,87 @@ class RazorpayService:
         return hmac.compare_digest(expected_sig, received_signature)
 
     @classmethod
-    def process_webhook_event(cls, raw_body: bytes, received_signature: str) -> dict[str, Any]:
+    def process_webhook_event(
+        cls,
+        raw_body: bytes,
+        received_signature: str,
+        headers: Optional[dict[str, Any]] = None,
+        client_ip: Optional[str] = None,
+    ) -> dict[str, Any]:
         """
-        Processes server-to-server Razorpay webhook events (payment.captured, order.paid).
+        Processes server-to-server Razorpay webhook events (payment.captured, order.paid, payment.failed).
+        Persists the complete webhook payload, headers, and metadata to RazorpayWebhookLog for audit & compliance.
         """
-        if not cls.verify_webhook_signature(raw_body, received_signature):
-            logger.warning("Razorpay webhook received with invalid signature.")
-            raise ValidationError("Invalid webhook signature.")
-
         try:
             event_data = json.loads(raw_body.decode("utf-8"))
         except (ValueError, UnicodeDecodeError):
+            RazorpayWebhookLog.objects.create(
+                event_type="malformed_json",
+                payload={"raw": raw_body.decode("utf-8", errors="replace")},
+                headers=headers or {},
+                signature=received_signature,
+                status=RazorpayWebhookLog.Status.FAILED,
+                error_message="Malformed JSON payload in webhook.",
+                ip_address=client_ip,
+            )
             raise ValidationError("Malformed JSON payload in webhook.")
 
-        event_name = event_data.get("event")
-        logger.info(f"Received Razorpay webhook event: {event_name}")
+        event_id = event_data.get("id") or ""
+        event_name = event_data.get("event") or ""
+        logger.info(f"Received Razorpay webhook event: {event_name} (ID: {event_id})")
 
-        if event_name in ["payment.captured", "order.paid"]:
-            payment_entity = event_data.get("payload", {}).get("payment", {}).get("entity", {})
-            order_entity = event_data.get("payload", {}).get("order", {}).get("entity", {})
+        # 1. Verify signature
+        if not cls.verify_webhook_signature(raw_body, received_signature):
+            logger.warning(f"Razorpay webhook received with invalid signature for event {event_name}.")
+            RazorpayWebhookLog.objects.create(
+                event_id=event_id,
+                event_type=event_name,
+                payload=event_data,
+                headers=headers or {},
+                signature=received_signature,
+                status=RazorpayWebhookLog.Status.INVALID_SIGNATURE,
+                error_message="Invalid webhook signature.",
+                ip_address=client_ip,
+            )
+            raise ValidationError("Invalid webhook signature.")
 
-            order_id = payment_entity.get("order_id") or order_entity.get("id")
-            payment_id = payment_entity.get("id")
+        # 2. Record initial webhook receipt in database
+        webhook_log = RazorpayWebhookLog.objects.create(
+            event_id=event_id,
+            event_type=event_name,
+            payload=event_data,
+            headers=headers or {},
+            signature=received_signature,
+            status=RazorpayWebhookLog.Status.PROCESSED,
+            ip_address=client_ip,
+        )
 
-            if not order_id:
-                return {"status": "ignored", "detail": "No order_id found in webhook payload."}
+        payment_entity = event_data.get("payload", {}).get("payment", {}).get("entity", {})
+        order_entity = event_data.get("payload", {}).get("order", {}).get("entity", {})
 
-            with transaction.atomic():
-                try:
-                    payment = SurveyPayment.objects.select_for_update().get(razorpay_order_id=order_id)
-                except SurveyPayment.DoesNotExist:
-                    logger.warning(f"SurveyPayment for order {order_id} not found in database.")
-                    return {"status": "ignored", "detail": f"Order {order_id} not found."}
+        order_id = payment_entity.get("order_id") or order_entity.get("id")
+        payment_id = payment_entity.get("id")
 
+        if not order_id:
+            webhook_log.status = RazorpayWebhookLog.Status.IGNORED
+            webhook_log.error_message = "No order_id found in webhook payload."
+            webhook_log.save(update_fields=["status", "error_message"])
+            return {"status": "ignored", "detail": "No order_id found in webhook payload."}
+
+        with transaction.atomic():
+            try:
+                payment = SurveyPayment.objects.select_for_update().get(razorpay_order_id=order_id)
+            except SurveyPayment.DoesNotExist:
+                logger.warning(f"SurveyPayment for order {order_id} not found in database.")
+                webhook_log.status = RazorpayWebhookLog.Status.IGNORED
+                webhook_log.error_message = f"Order {order_id} not found."
+                webhook_log.save(update_fields=["status", "error_message"])
+                return {"status": "ignored", "detail": f"Order {order_id} not found."}
+
+            webhook_log.payment = payment
+            webhook_log.processed_at = timezone.now()
+
+            if event_name in ["payment.captured", "order.paid"]:
                 if payment.status != SurveyPayment.Status.SUCCESS:
                     payment.status = SurveyPayment.Status.SUCCESS
                     if payment_id:
@@ -533,11 +582,41 @@ class RazorpayService:
                     survey = Survey.objects.select_for_update().get(id=payment.survey_id)
                     if not survey.is_paid:
                         survey.is_paid = True
-                        survey.save(update_fields=["is_paid", "updated_at"])
+                        if payment.pricing_option:
+                            survey.pricing_option = payment.pricing_option
+                        if payment.coupon:
+                            CouponUsage.objects.get_or_create(
+                                coupon=payment.coupon,
+                                survey=survey,
+                                user=payment.user,
+                                defaults={
+                                    "original_amount": payment.pricing_option.price if payment.pricing_option else payment.amount,
+                                    "discount_amount": (payment.pricing_option.price - payment.amount) if payment.pricing_option else Decimal("0.00"),
+                                    "final_amount": payment.amount,
+                                },
+                            )
+                            survey.applied_coupon = payment.coupon
+                        survey.save(update_fields=["is_paid", "pricing_option", "applied_coupon", "updated_at"])
 
+                webhook_log.status = RazorpayWebhookLog.Status.PROCESSED
+                webhook_log.save(update_fields=["payment", "status", "processed_at"])
                 return {"status": "success", "order_id": order_id, "is_paid": True}
 
-        return {"status": "ignored", "event": event_name}
+            elif event_name == "payment.failed":
+                payment.status = SurveyPayment.Status.FAILED
+                err = payment_entity.get("error_description") or "Payment failed at gateway."
+                payment.error_description = err
+                payment.error_code = payment_entity.get("error_code") or "GATEWAY_ERROR"
+                payment.save(update_fields=["status", "error_description", "error_code", "updated_at"])
+
+                webhook_log.status = RazorpayWebhookLog.Status.PROCESSED
+                webhook_log.save(update_fields=["payment", "status", "processed_at"])
+                return {"status": "failed_recorded", "order_id": order_id}
+
+            else:
+                webhook_log.status = RazorpayWebhookLog.Status.IGNORED
+                webhook_log.save(update_fields=["payment", "status", "processed_at"])
+                return {"status": "ignored", "event": event_name}
 
 
 

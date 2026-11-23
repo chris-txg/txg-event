@@ -5,11 +5,48 @@ from survey.models import (
     CouponUsage,
     Question,
     QuestionChoice,
+    RazorpayWebhookLog,
     Survey,
     SurveyPayment,
     SurveyPricingOption,
     SurveyResponse,
 )
+
+
+@admin.register(RazorpayWebhookLog)
+class RazorpayWebhookLogAdmin(admin.ModelAdmin):
+    list_display = (
+        "id",
+        "event_type",
+        "event_id",
+        "status",
+        "payment",
+        "ip_address",
+        "received_at",
+        "processed_at",
+    )
+    list_filter = ("event_type", "status", "received_at")
+    search_fields = ("event_id", "event_type", "signature", "payment__razorpay_order_id")
+    readonly_fields = (
+        "id",
+        "event_id",
+        "event_type",
+        "payload",
+        "headers",
+        "signature",
+        "status",
+        "error_message",
+        "payment",
+        "ip_address",
+        "received_at",
+        "processed_at",
+    )
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return False
 
 
 @admin.register(Coupon)

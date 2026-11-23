@@ -467,3 +467,48 @@ class CouponUsage(models.Model):
         return f"{self.coupon.code} used by {self.user.username} on Survey '{self.survey.title}' (-INR {self.discount_amount})"
 
 
+class RazorpayWebhookLog(models.Model):
+    class Status(models.TextChoices):
+        PROCESSED = "processed", "Processed"
+        IGNORED = "ignored", "Ignored"
+        FAILED = "failed", "Failed"
+        INVALID_SIGNATURE = "invalid_signature", "Invalid Signature"
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    event_id = models.CharField(max_length=100, blank=True, db_index=True)
+    event_type = models.CharField(max_length=100, blank=True, db_index=True)
+    payload = models.JSONField(help_text="Full JSON payload received from Razorpay webhook")
+    headers = models.JSONField(default=dict, blank=True, help_text="HTTP request headers from webhook")
+    signature = models.CharField(max_length=255, blank=True)
+    status = models.CharField(
+        max_length=30,
+        choices=Status.choices,
+        default=Status.PROCESSED,
+        db_index=True,
+    )
+    error_message = models.TextField(blank=True, null=True)
+    payment = models.ForeignKey(
+        "SurveyPayment",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="webhook_logs",
+        db_index=True,
+    )
+    ip_address = models.GenericIPAddressField(null=True, blank=True)
+    received_at = models.DateTimeField(auto_now_add=True, db_index=True)
+    processed_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ["-received_at"]
+        indexes = [
+            models.Index(fields=["event_type", "status"]),
+            models.Index(fields=["event_id"]),
+            models.Index(fields=["received_at"]),
+        ]
+
+    def __str__(self) -> str:
+        return f"Webhook {self.event_type} ({self.status}) at {self.received_at}"
+
+
+
