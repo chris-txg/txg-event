@@ -10,10 +10,21 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from accounts.services import get_client_ip
-from survey.models import Answer, Question, QuestionChoice, Survey, SurveyPricingOption, SurveyResponse
+from survey.models import (
+    Answer,
+    Coupon,
+    CouponUsage,
+    Question,
+    QuestionChoice,
+    Survey,
+    SurveyPricingOption,
+    SurveyResponse,
+)
 from survey.permissions import IsSurveyOwnerOrStaff
 from survey.serializers import (
     AnswerDetailSerializer,
+    CouponValidateRequestSerializer,
+    CouponValidateResponseSerializer,
     QuestionChoiceSerializer,
     QuestionCreateSerializer,
     QuestionSerializer,
@@ -28,7 +39,7 @@ from survey.serializers import (
     SurveyResponseDetailSerializer,
     SurveySubmitSerializer,
 )
-from survey.services import RazorpayService, SurveyService
+from survey.services import CouponService, RazorpayService, SurveyService
 
 
 
@@ -223,11 +234,22 @@ class SurveyPublishView(APIView):
             # Check if there is an active free plan available
             pricing_option = SurveyPricingOption.objects.filter(is_active=True, is_free=True).first()
 
+        coupon_code = req_serializer.validated_data.get("coupon_code")
+        coupon = None
+        if coupon_code:
+            try:
+                coupon = Coupon.objects.get(code__iexact=coupon_code.strip())
+            except Coupon.DoesNotExist:
+                return Response(
+                    {"detail": f"Coupon code '{coupon_code}' does not exist."},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
         try:
-            SurveyService.publish_survey(survey, pricing_option=pricing_option)
+            SurveyService.publish_survey(survey, pricing_option=pricing_option, coupon=coupon)
         except DjangoValidationError as exc:
             msg = exc.messages[0] if hasattr(exc, "messages") else str(exc)
-            if "limit" in msg.lower() or "payment is required" in msg.lower():
+            if "limit" in msg.lower() or "payment" in msg.lower():
                 return Response(
                     {
                         "detail": msg,
@@ -247,6 +269,7 @@ class SurveyPublishView(APIView):
                 "status": survey.status,
                 "is_paid": survey.is_paid,
                 "pricing_option": survey.pricing_option.code if survey.pricing_option else None,
+                "applied_coupon": survey.applied_coupon.code if survey.applied_coupon else None,
             },
             status=status.HTTP_200_OK,
         )
@@ -291,6 +314,7 @@ class SurveyCreatePaymentOrderView(APIView):
         req_serializer.is_valid(raise_exception=True)
         opt_code = req_serializer.validated_data.get("pricing_option_code")
         opt_id = req_serializer.validated_data.get("pricing_option_id")
+        coupon_code = req_serializer.validated_data.get("coupon_code")
 
         pricing_option = None
         if opt_id:
@@ -301,16 +325,33 @@ class SurveyCreatePaymentOrderView(APIView):
             # Default to first active paid plan
             pricing_option = SurveyPricingOption.objects.filter(is_active=True, is_free=False).first()
 
+        coupon = None
+        if coupon_code:
+            try:
+                coupon = Coupon.objects.get(code__iexact=coupon_code.strip())
+            except Coupon.DoesNotExist:
+                return Response(
+                    {"detail": f"Coupon code '{coupon_code}' does not exist."},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
         try:
             payment = RazorpayService.create_order(
                 survey=survey,
                 user=request.user,
                 pricing_option=pricing_option,
+                coupon=coupon,
             )
         except DjangoValidationError as exc:
             return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
 
         key_id, _, _ = RazorpayService.get_credentials()
+        from decimal import Decimal
+        discount_amount = (
+            (pricing_option.price - payment.amount)
+            if (pricing_option and payment.coupon)
+            else Decimal("0.00")
+        )
         data = {
             "order_id": payment.razorpay_order_id,
             "amount": payment.amount,
@@ -320,8 +361,78 @@ class SurveyCreatePaymentOrderView(APIView):
             "survey_id": survey.id,
             "survey_title": survey.title,
             "pricing_option_name": pricing_option.name if pricing_option else "Standard Plan",
+            "coupon_code": payment.coupon.code if payment.coupon else None,
+            "discount_amount": discount_amount,
         }
         return Response(data, status=status.HTTP_200_OK)
+
+
+class SurveyCouponValidateView(APIView):
+    """
+    Validates a coupon code against a survey and intended pricing plan.
+    Calculates the exact discount and final payable price.
+    """
+
+    permission_classes = [permissions.IsAuthenticated, IsSurveyOwnerOrStaff]
+
+    @extend_schema(
+        tags=["Surveys - Payments"],
+        summary="Validate a coupon code and preview discount",
+        request=CouponValidateRequestSerializer,
+        responses={
+            status.HTTP_200_OK: CouponValidateResponseSerializer,
+            status.HTTP_400_BAD_REQUEST: OpenApiResponse(description="Coupon invalid, expired, or limit reached."),
+        },
+    )
+    def post(self, request: Request, id: str) -> Response:
+        survey = get_object_or_404(Survey, id=id)
+        self.check_object_permissions(request, survey)
+
+        serializer = CouponValidateRequestSerializer(data=request.data or {})
+        serializer.is_valid(raise_exception=True)
+        code = serializer.validated_data["coupon_code"]
+        opt_code = serializer.validated_data.get("pricing_option_code")
+        opt_id = serializer.validated_data.get("pricing_option_id")
+
+        pricing_option = None
+        if opt_id:
+            pricing_option = get_object_or_404(SurveyPricingOption, id=opt_id)
+        elif opt_code:
+            pricing_option = get_object_or_404(SurveyPricingOption, code=opt_code)
+        else:
+            pricing_option = SurveyPricingOption.objects.filter(is_active=True, is_free=False).first()
+
+        if not pricing_option:
+            return Response(
+                {"detail": "No active paid pricing option found to apply this coupon to."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        try:
+            coupon, discount_amount, final_price = CouponService.validate_coupon(
+                code=code,
+                user=request.user,
+                pricing_option=pricing_option,
+                survey=survey,
+            )
+        except DjangoValidationError as exc:
+            msg = exc.messages[0] if hasattr(exc, "messages") else str(exc)
+            return Response({"valid": False, "detail": msg}, status=status.HTTP_400_BAD_REQUEST)
+
+        return Response(
+            {
+                "valid": True,
+                "coupon_code": coupon.code,
+                "discount_type": coupon.discount_type,
+                "discount_value": coupon.discount_value,
+                "original_price": pricing_option.price,
+                "discount_amount": discount_amount,
+                "final_price": final_price,
+                "currency": pricing_option.currency,
+                "message": f"Coupon '{coupon.code}' applied! Discount of INR {discount_amount}.",
+            },
+            status=status.HTTP_200_OK,
+        )
 
 
 class SurveyVerifyPaymentView(APIView):

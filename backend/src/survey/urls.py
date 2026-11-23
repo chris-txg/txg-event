@@ -11,6 +11,7 @@ from survey.views import (
     RazorpayWebhookView,
     SurveyAnalyticsView,
     SurveyCloseView,
+    SurveyCouponValidateView,
     SurveyCreatePaymentOrderView,
     SurveyDetailView,
     SurveyListCreateView,
@@ -33,8 +34,9 @@ urlpatterns = [
     path("api/surveys/<uuid:id>/close/", SurveyCloseView.as_view(), name="survey_close"),
 
     # -------------------------------------------------------------
-    # Razorpay Payment APIs & Webhook
+    # Razorpay Payment & Coupon APIs
     # -------------------------------------------------------------
+    path("api/surveys/<uuid:id>/coupons/validate/", SurveyCouponValidateView.as_view(), name="survey_coupon_validate"),
     path("api/surveys/<uuid:id>/payment/order/", SurveyCreatePaymentOrderView.as_view(), name="survey_payment_order"),
     path("api/surveys/<uuid:id>/payment/verify/", SurveyVerifyPaymentView.as_view(), name="survey_payment_verify"),
     path("api/payments/razorpay/webhook/", RazorpayWebhookView.as_view(), name="razorpay_webhook"),

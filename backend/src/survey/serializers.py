@@ -5,7 +5,17 @@ from django.utils import timezone
 from rest_framework import serializers
 
 from projects.models import EventProject
-from survey.models import Answer, Question, QuestionChoice, Survey, SurveyPayment, SurveyPricingOption, SurveyResponse
+from survey.models import (
+    Answer,
+    Coupon,
+    CouponUsage,
+    Question,
+    QuestionChoice,
+    Survey,
+    SurveyPayment,
+    SurveyPricingOption,
+    SurveyResponse,
+)
 
 
 class SurveyPricingOptionSerializer(serializers.ModelSerializer):
@@ -161,6 +171,7 @@ class SurveyDetailSerializer(serializers.ModelSerializer):
     is_active = serializers.BooleanField(read_only=True)
     response_count = serializers.IntegerField(read_only=True)
     pricing_option = SurveyPricingOptionSerializer(read_only=True)
+    applied_coupon_code = serializers.CharField(source="applied_coupon.code", read_only=True, allow_null=True)
     questions = QuestionSerializer(many=True, read_only=True)
 
     class Meta:
@@ -179,6 +190,7 @@ class SurveyDetailSerializer(serializers.ModelSerializer):
             "end_date",
             "is_paid",
             "pricing_option",
+            "applied_coupon_code",
             "created_by_username",
             "is_active",
             "response_count",
@@ -190,6 +202,7 @@ class SurveyDetailSerializer(serializers.ModelSerializer):
             "id",
             "is_paid",
             "pricing_option",
+            "applied_coupon_code",
             "created_by_username",
             "project_name",
             "is_active",
@@ -409,6 +422,8 @@ class SurveyPaymentOrderResponseSerializer(serializers.Serializer):
     survey_id = serializers.UUIDField()
     survey_title = serializers.CharField()
     pricing_option_name = serializers.CharField(required=False, allow_blank=True)
+    coupon_code = serializers.CharField(required=False, allow_blank=True)
+    discount_amount = serializers.DecimalField(max_digits=10, decimal_places=2, required=False)
 
 
 class SurveyPublishRequestSerializer(serializers.Serializer):
@@ -421,6 +436,11 @@ class SurveyPublishRequestSerializer(serializers.Serializer):
         required=False,
         allow_null=True,
         help_text="UUID of active SurveyPricingOption",
+    )
+    coupon_code = serializers.CharField(
+        required=False,
+        allow_blank=True,
+        help_text="Optional coupon code (e.g. 'LAUNCH50' or 'VIPFREE')",
     )
 
 
@@ -435,6 +455,41 @@ class SurveyCreatePaymentOrderRequestSerializer(serializers.Serializer):
         allow_null=True,
         help_text="UUID of active paid SurveyPricingOption",
     )
+    coupon_code = serializers.CharField(
+        required=False,
+        allow_blank=True,
+        help_text="Optional coupon code to apply discount before payment",
+    )
+
+
+class CouponValidateRequestSerializer(serializers.Serializer):
+    coupon_code = serializers.CharField(
+        required=True,
+        max_length=50,
+        help_text="Coupon code to validate",
+    )
+    pricing_option_code = serializers.CharField(
+        required=False,
+        allow_blank=True,
+        help_text="Code of the pricing option to test against (e.g. 'standard')",
+    )
+    pricing_option_id = serializers.UUIDField(
+        required=False,
+        allow_null=True,
+        help_text="UUID of the pricing option to test against",
+    )
+
+
+class CouponValidateResponseSerializer(serializers.Serializer):
+    valid = serializers.BooleanField()
+    coupon_code = serializers.CharField()
+    discount_type = serializers.CharField()
+    discount_value = serializers.DecimalField(max_digits=10, decimal_places=2)
+    original_price = serializers.DecimalField(max_digits=10, decimal_places=2)
+    discount_amount = serializers.DecimalField(max_digits=10, decimal_places=2)
+    final_price = serializers.DecimalField(max_digits=10, decimal_places=2)
+    currency = serializers.CharField()
+    message = serializers.CharField()
 
 
 class SurveyPaymentVerifySerializer(serializers.Serializer):

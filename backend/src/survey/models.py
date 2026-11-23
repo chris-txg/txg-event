@@ -52,6 +52,75 @@ class SurveyPricingOption(models.Model):
         return f"{self.name} ({self.code}) - {self.currency} {self.price} ({'Active' if self.is_active else 'Inactive'})"
 
 
+class Coupon(models.Model):
+    class DiscountType(models.TextChoices):
+        PERCENTAGE = "percentage", "Percentage (%)"
+        FLAT = "flat", "Flat Amount (INR)"
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    code = models.CharField(max_length=50, unique=True, db_index=True)
+    description = models.CharField(max_length=255, blank=True)
+    discount_type = models.CharField(
+        max_length=20,
+        choices=DiscountType.choices,
+        default=DiscountType.PERCENTAGE,
+        db_index=True,
+    )
+    discount_value = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        help_text="Percentage (e.g. 50.00 for 50%) or Flat Amount in INR (e.g. 200.00)",
+    )
+    max_uses = models.PositiveIntegerField(
+        default=100,
+        help_text="Total number of times this coupon can be redeemed platform-wide.",
+    )
+    max_uses_per_user = models.PositiveIntegerField(
+        default=1,
+        help_text="Max times a single user can redeem this coupon.",
+    )
+    valid_from = models.DateTimeField(null=True, blank=True, db_index=True)
+    valid_until = models.DateTimeField(null=True, blank=True, db_index=True)
+    is_active = models.BooleanField(default=True, db_index=True)
+    applicable_plans = models.ManyToManyField(
+        SurveyPricingOption,
+        blank=True,
+        related_name="coupons",
+        help_text="Applicable pricing plans. If none selected, applies to all paid plans.",
+    )
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+        indexes = [
+            models.Index(fields=["code", "is_active"]),
+            models.Index(fields=["is_active", "valid_until"]),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.code} ({self.get_discount_type_display()}: {self.discount_value})"
+
+    def clean(self) -> None:
+        from decimal import Decimal
+        if self.discount_type == self.DiscountType.PERCENTAGE and self.discount_value > Decimal("100.00"):
+            raise ValidationError({"discount_value": "Percentage discount cannot exceed 100%."})
+        if self.discount_value <= Decimal("0.00"):
+            raise ValidationError({"discount_value": "Discount value must be greater than zero."})
+        if self.valid_from and self.valid_until and self.valid_from > self.valid_until:
+            raise ValidationError({"valid_until": "Valid until date cannot be earlier than valid from date."})
+
+    def is_currently_valid(self) -> bool:
+        if not self.is_active:
+            return False
+        now = timezone.now()
+        if self.valid_from and now < self.valid_from:
+            return False
+        if self.valid_until and now > self.valid_until:
+            return False
+        return True
+
+
 class Survey(models.Model):
     class Status(models.TextChoices):
         DRAFT = "draft", "Draft"
@@ -120,6 +189,15 @@ class Survey(models.Model):
         related_name="surveys",
         db_index=True,
         help_text="Pricing tier chosen when published.",
+    )
+    applied_coupon = models.ForeignKey(
+        Coupon,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="surveys",
+        db_index=True,
+        help_text="Coupon code applied for publishing.",
     )
     created_at = models.DateTimeField(auto_now_add=True, db_index=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -316,6 +394,15 @@ class SurveyPayment(models.Model):
         db_index=True,
         help_text="Pricing tier associated with this payment.",
     )
+    coupon = models.ForeignKey(
+        Coupon,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="payments",
+        db_index=True,
+        help_text="Coupon code used for this payment, if any.",
+    )
     razorpay_order_id = models.CharField(max_length=100, unique=True, db_index=True)
     razorpay_payment_id = models.CharField(max_length=100, blank=True, null=True, db_index=True)
     razorpay_signature = models.CharField(max_length=255, blank=True, null=True)
@@ -342,4 +429,41 @@ class SurveyPayment(models.Model):
 
     def __str__(self) -> str:
         return f"Payment {self.id} for Survey '{self.survey_id}' - {self.status}"
+
+
+class CouponUsage(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    coupon = models.ForeignKey(
+        Coupon,
+        on_delete=models.PROTECT,
+        related_name="usages",
+        db_index=True,
+    )
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="coupon_usages",
+        db_index=True,
+    )
+    survey = models.ForeignKey(
+        Survey,
+        on_delete=models.CASCADE,
+        related_name="coupon_usages",
+        db_index=True,
+    )
+    original_amount = models.DecimalField(max_digits=10, decimal_places=2)
+    discount_amount = models.DecimalField(max_digits=10, decimal_places=2)
+    final_amount = models.DecimalField(max_digits=10, decimal_places=2)
+    used_at = models.DateTimeField(auto_now_add=True, db_index=True)
+
+    class Meta:
+        ordering = ["-used_at"]
+        indexes = [
+            models.Index(fields=["coupon", "user"]),
+            models.Index(fields=["user", "used_at"]),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.coupon.code} used by {self.user.username} on Survey '{self.survey.title}' (-INR {self.discount_amount})"
+
 

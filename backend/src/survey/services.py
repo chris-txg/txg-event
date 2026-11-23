@@ -15,10 +15,87 @@ from django.db import transaction
 from django.db.models import Avg, Count, Max, Min
 from django.utils import timezone
 
-from survey.models import Answer, Question, QuestionChoice, Survey, SurveyPayment, SurveyPricingOption, SurveyResponse
+from survey.models import (
+    Answer,
+    Coupon,
+    CouponUsage,
+    Question,
+    QuestionChoice,
+    Survey,
+    SurveyPayment,
+    SurveyPricingOption,
+    SurveyResponse,
+)
 
 logger = logging.getLogger(__name__)
 User = get_user_model()
+
+
+class CouponService:
+    @staticmethod
+    def calculate_discount(original_price: Decimal, coupon: Coupon) -> tuple[Decimal, Decimal]:
+        from decimal import ROUND_HALF_UP
+
+        if coupon.discount_type == Coupon.DiscountType.PERCENTAGE:
+            raw_discount = (original_price * coupon.discount_value) / Decimal("100")
+            discount_amount = raw_discount.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+        elif coupon.discount_type == Coupon.DiscountType.FLAT:
+            discount_amount = coupon.discount_value
+        else:
+            discount_amount = Decimal("0.00")
+
+        if discount_amount > original_price:
+            discount_amount = original_price
+
+        final_price = (original_price - discount_amount).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+        return discount_amount, final_price
+
+    @classmethod
+    def validate_coupon(
+        cls,
+        code: str,
+        user: Any,
+        pricing_option: SurveyPricingOption,
+        survey: Optional[Survey] = None,
+    ) -> tuple[Coupon, Decimal, Decimal]:
+        clean_code = (code or "").strip().upper()
+        if not clean_code:
+            raise ValidationError("Please provide a valid coupon code.")
+
+        try:
+            coupon = Coupon.objects.prefetch_related("applicable_plans").get(code__iexact=clean_code)
+        except Coupon.DoesNotExist:
+            raise ValidationError(f"Coupon code '{clean_code}' is invalid or does not exist.")
+
+        if not coupon.is_active:
+            raise ValidationError(f"Coupon code '{clean_code}' is currently inactive.")
+
+        now = timezone.now()
+        if coupon.valid_from and now < coupon.valid_from:
+            raise ValidationError(f"Coupon code '{clean_code}' is not valid yet.")
+        if coupon.valid_until and now > coupon.valid_until:
+            raise ValidationError(f"Coupon code '{clean_code}' has expired.")
+
+        # Check applicable plans
+        if coupon.applicable_plans.exists():
+            if not coupon.applicable_plans.filter(id=pricing_option.id).exists():
+                raise ValidationError(f"Coupon code '{clean_code}' is not applicable to the '{pricing_option.name}' plan.")
+
+        # Check total global usages
+        total_used = CouponUsage.objects.filter(coupon=coupon).count()
+        if total_used >= coupon.max_uses:
+            raise ValidationError(f"Coupon code '{clean_code}' has reached its maximum global usage limit.")
+
+        # Check per-user usage
+        if user and user.is_authenticated:
+            user_used = CouponUsage.objects.filter(coupon=coupon, user=user).count()
+            if user_used >= coupon.max_uses_per_user:
+                raise ValidationError(
+                    f"You have already redeemed coupon '{clean_code}' the maximum allowed number of times ({coupon.max_uses_per_user})."
+                )
+
+        discount_amount, final_price = cls.calculate_discount(pricing_option.price, coupon)
+        return coupon, discount_amount, final_price
 
 
 class SurveyService:
@@ -26,6 +103,7 @@ class SurveyService:
     def publish_survey(
         survey: Survey,
         pricing_option: Optional[SurveyPricingOption] = None,
+        coupon: Optional[Coupon] = None,
     ) -> Survey:
         if survey.status == Survey.Status.CLOSED:
             raise ValidationError("This survey is closed and cannot be reopened or republished.")
@@ -37,7 +115,35 @@ class SurveyService:
             if not pricing_option.is_active:
                 raise ValidationError(f"Pricing plan '{pricing_option.name}' is currently not active.")
 
-            if pricing_option.is_free:
+            if coupon:
+                validated_coupon, discount_amount, final_price = CouponService.validate_coupon(
+                    code=coupon.code,
+                    user=survey.created_by,
+                    pricing_option=pricing_option,
+                    survey=survey,
+                )
+                if final_price == Decimal("0.00"):
+                    # 100% discount via coupon: free publish
+                    with transaction.atomic():
+                        CouponUsage.objects.create(
+                            coupon=validated_coupon,
+                            user=survey.created_by,
+                            survey=survey,
+                            original_amount=pricing_option.price,
+                            discount_amount=discount_amount,
+                            final_amount=Decimal("0.00"),
+                        )
+                        survey.applied_coupon = validated_coupon
+                        survey.pricing_option = pricing_option
+                        survey.is_paid = True
+                else:
+                    if not survey.is_paid:
+                        raise ValidationError(
+                            f"Payment of INR {final_price} is required for this plan after applying coupon '{validated_coupon.code}'. Please complete payment first."
+                        )
+                    survey.applied_coupon = validated_coupon
+                    survey.pricing_option = pricing_option
+            elif pricing_option.is_free:
                 used_free_count = Survey.objects.filter(
                     created_by=survey.created_by,
                     pricing_option=pricing_option,
@@ -61,7 +167,7 @@ class SurveyService:
         survey.status = Survey.Status.PUBLISHED
         if not survey.start_date:
             survey.start_date = timezone.now()
-        survey.save(update_fields=["status", "start_date", "is_paid", "pricing_option", "updated_at"])
+        survey.save(update_fields=["status", "start_date", "is_paid", "pricing_option", "applied_coupon", "updated_at"])
         return survey
 
     @staticmethod
@@ -200,10 +306,12 @@ class RazorpayService:
         survey: Survey,
         user: Any,
         pricing_option: Optional[SurveyPricingOption] = None,
+        coupon: Optional[Coupon] = None,
         amount_inr: Optional[Decimal] = None,
     ) -> SurveyPayment:
         """
         Creates a Razorpay order via Razorpay REST API and records a pending SurveyPayment.
+        Supports applying valid coupons for discounted pricing orders.
         """
         if survey.is_paid:
             raise ValidationError("This survey is already paid and ready to publish.")
@@ -215,11 +323,30 @@ class RazorpayService:
                 raise ValidationError(f"Pricing plan '{pricing_option.name}' is currently inactive.")
             if pricing_option.is_free:
                 raise ValidationError("Cannot create a Razorpay payment order for a free plan. Use the publish endpoint.")
-            final_amount = pricing_option.price
+            base_amount = pricing_option.price
         elif amount_inr is not None:
-            final_amount = amount_inr
+            base_amount = amount_inr
         else:
-            final_amount = default_fee
+            base_amount = default_fee
+
+        applied_coupon = None
+        if coupon:
+            if not pricing_option:
+                raise ValidationError("A pricing option must be selected to apply a coupon code.")
+            validated_coupon, discount_amount, final_price = CouponService.validate_coupon(
+                code=coupon.code,
+                user=user,
+                pricing_option=pricing_option,
+                survey=survey,
+            )
+            if final_price == Decimal("0.00"):
+                raise ValidationError(
+                    f"Coupon '{validated_coupon.code}' provides a 100% discount (final price is INR 0). Payment order is not required; publish the survey directly with this coupon."
+                )
+            final_amount = final_price
+            applied_coupon = validated_coupon
+        else:
+            final_amount = base_amount
 
         amount_paise = int(final_amount * 100)
 
@@ -233,6 +360,7 @@ class RazorpayService:
                 "survey_id": str(survey.id),
                 "survey_title": survey.title[:40],
                 "user_id": str(user.id),
+                "coupon_code": applied_coupon.code if applied_coupon else "",
             },
         }
 
@@ -263,6 +391,7 @@ class RazorpayService:
             survey=survey,
             user=user,
             pricing_option=pricing_option,
+            coupon=applied_coupon,
             razorpay_order_id=order_id,
             amount=final_amount,
             currency="INR",
@@ -334,7 +463,19 @@ class RazorpayService:
             locked_survey.is_paid = True
             if payment.pricing_option:
                 locked_survey.pricing_option = payment.pricing_option
-            locked_survey.save(update_fields=["is_paid", "pricing_option", "updated_at"])
+            if payment.coupon:
+                CouponUsage.objects.get_or_create(
+                    coupon=payment.coupon,
+                    survey=locked_survey,
+                    user=payment.user,
+                    defaults={
+                        "original_amount": payment.pricing_option.price if payment.pricing_option else payment.amount,
+                        "discount_amount": (payment.pricing_option.price - payment.amount) if payment.pricing_option else Decimal("0.00"),
+                        "final_amount": payment.amount,
+                    },
+                )
+                locked_survey.applied_coupon = payment.coupon
+            locked_survey.save(update_fields=["is_paid", "pricing_option", "applied_coupon", "updated_at"])
 
         return payment
 

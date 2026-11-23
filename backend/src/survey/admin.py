@@ -1,5 +1,64 @@
 from django.contrib import admin
-from survey.models import Answer, Question, QuestionChoice, Survey, SurveyPayment, SurveyPricingOption, SurveyResponse
+from survey.models import (
+    Answer,
+    Coupon,
+    CouponUsage,
+    Question,
+    QuestionChoice,
+    Survey,
+    SurveyPayment,
+    SurveyPricingOption,
+    SurveyResponse,
+)
+
+
+@admin.register(Coupon)
+class CouponAdmin(admin.ModelAdmin):
+    list_display = (
+        "code",
+        "discount_type",
+        "discount_value",
+        "is_active",
+        "max_uses",
+        "max_uses_per_user",
+        "valid_from",
+        "valid_until",
+        "created_at",
+    )
+    list_filter = ("discount_type", "is_active", "valid_until")
+    search_fields = ("code", "description")
+    list_editable = ("is_active",)
+    readonly_fields = ("id", "created_at", "updated_at")
+    filter_horizontal = ("applicable_plans",)
+
+
+@admin.register(CouponUsage)
+class CouponUsageAdmin(admin.ModelAdmin):
+    list_display = (
+        "id",
+        "coupon",
+        "user",
+        "survey",
+        "original_amount",
+        "discount_amount",
+        "final_amount",
+        "used_at",
+    )
+    list_filter = ("coupon", "used_at")
+    search_fields = ("coupon__code", "user__username", "user__email", "survey__title")
+    readonly_fields = (
+        "id",
+        "coupon",
+        "user",
+        "survey",
+        "original_amount",
+        "discount_amount",
+        "final_amount",
+        "used_at",
+    )
+
+    def has_add_permission(self, request):
+        return False
 
 
 @admin.register(SurveyPricingOption)
@@ -51,6 +110,7 @@ class SurveyAdmin(admin.ModelAdmin):
         "status",
         "is_paid",
         "pricing_option",
+        "applied_coupon",
         "visibility",
         "allow_anonymous",
         "duplicate_rule",
@@ -58,8 +118,8 @@ class SurveyAdmin(admin.ModelAdmin):
         "response_count",
         "created_at",
     )
-    list_filter = ("status", "is_paid", "pricing_option", "visibility", "allow_anonymous", "duplicate_rule")
-    search_fields = ("title", "description", "created_by__username", "created_by__email")
+    list_filter = ("status", "is_paid", "pricing_option", "applied_coupon", "visibility", "allow_anonymous", "duplicate_rule")
+    search_fields = ("title", "description", "created_by__username", "created_by__email", "applied_coupon__code")
     readonly_fields = ("id", "created_at", "updated_at", "response_count")
     ordering = ("-created_at",)
     inlines = [QuestionInline]
@@ -75,7 +135,7 @@ class SurveyAdmin(admin.ModelAdmin):
         ),
         (
             "Publishing & Access Controls",
-            {"fields": ("status", "is_paid", "pricing_option", "visibility", "allow_anonymous", "duplicate_rule", "start_date", "end_date")},
+            {"fields": ("status", "is_paid", "pricing_option", "applied_coupon", "visibility", "allow_anonymous", "duplicate_rule", "start_date", "end_date")},
         ),
     )
 
@@ -112,6 +172,7 @@ class SurveyPaymentAdmin(admin.ModelAdmin):
         "survey",
         "user",
         "pricing_option",
+        "coupon",
         "razorpay_order_id",
         "razorpay_payment_id",
         "amount",
@@ -119,10 +180,11 @@ class SurveyPaymentAdmin(admin.ModelAdmin):
         "status",
         "created_at",
     )
-    list_filter = ("status", "pricing_option", "currency", "created_at")
+    list_filter = ("status", "pricing_option", "coupon", "currency", "created_at")
     search_fields = (
         "razorpay_order_id",
         "razorpay_payment_id",
+        "coupon__code",
         "survey__title",
         "user__username",
     )
