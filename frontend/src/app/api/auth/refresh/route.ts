@@ -1,7 +1,6 @@
 import { NextResponse } from 'next/server';
 import { getServerAuthTokens, setAuthCookies, clearAuthCookies } from '@/lib/auth/cookies';
-
-const DJANGO_API_URL = process.env.DJANGO_API_URL || 'http://localhost:8000';
+import { DJANGO_BASE_URL, DJANGO_ENDPOINTS } from '@/config/endpoints';
 
 export async function POST() {
   try {
@@ -16,7 +15,7 @@ export async function POST() {
       return response;
     }
 
-    const res = await fetch(`${DJANGO_API_URL}/api/auth/token/refresh/`, {
+    const res = await fetch(`${DJANGO_BASE_URL}${DJANGO_ENDPOINTS.AUTH.TOKEN_REFRESH}`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',

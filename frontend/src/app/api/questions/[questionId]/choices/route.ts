@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { djangoFetch } from '@/lib/api/django-client';
+import { DJANGO_ENDPOINTS } from '@/config/endpoints';
 
 /**
  * POST /api/questions/[questionId]/choices
@@ -18,7 +19,7 @@ export async function POST(
 
     const jsonBody = await request.json();
 
-    const res = await djangoFetch(`/api/questions/${questionId}/choices/`, {
+    const res = await djangoFetch(DJANGO_ENDPOINTS.QUESTIONS.CHOICES(questionId), {
       method: 'POST',
       requiresAuth: true,
       body: JSON.stringify(jsonBody),

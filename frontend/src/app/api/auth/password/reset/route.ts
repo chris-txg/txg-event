@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { forgotPasswordSchema } from '@/features/authentication/schemas/password.schema';
-
-const DJANGO_API_URL = process.env.DJANGO_API_URL || 'http://localhost:8000';
+import { DJANGO_BASE_URL, DJANGO_ENDPOINTS } from '@/config/endpoints';
 
 export async function POST(request: NextRequest) {
   try {
@@ -15,7 +14,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const res = await fetch(`${DJANGO_API_URL}/api/auth/password/reset/`, {
+    const res = await fetch(`${DJANGO_BASE_URL}${DJANGO_ENDPOINTS.AUTH.PASSWORD_RESET}`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',

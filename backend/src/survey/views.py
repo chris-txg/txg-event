@@ -360,6 +360,7 @@ class SurveyCreatePaymentOrderView(APIView):
             "key_id": key_id,
             "survey_id": survey.id,
             "survey_title": survey.title,
+            "pricing_option_code": pricing_option.code if pricing_option else "standard",
             "pricing_option_name": pricing_option.name if pricing_option else "Standard Plan",
             "coupon_code": payment.coupon.code if payment.coupon else None,
             "discount_amount": discount_amount,

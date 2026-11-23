@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { djangoFetch } from '@/lib/api/django-client';
+import { DJANGO_ENDPOINTS } from '@/config/endpoints';
 
 export async function GET(
   _request: NextRequest,
@@ -7,7 +8,7 @@ export async function GET(
 ) {
   try {
     const { id } = await params;
-    const res = await djangoFetch(`/api/projects/${id}/`, {
+    const res = await djangoFetch(DJANGO_ENDPOINTS.PROJECTS.DETAIL(id), {
       method: 'GET',
       requiresAuth: true,
     });
@@ -33,7 +34,7 @@ export async function PATCH(
     if (contentType.includes('multipart/form-data')) {
       const formData = await request.formData();
 
-      const res = await djangoFetch(`/api/projects/${id}/`, {
+      const res = await djangoFetch(DJANGO_ENDPOINTS.PROJECTS.DETAIL(id), {
         method: 'PATCH',
         requiresAuth: true,
         body: formData,
@@ -44,7 +45,7 @@ export async function PATCH(
     } else {
       const jsonBody = await request.json();
 
-      const res = await djangoFetch(`/api/projects/${id}/`, {
+      const res = await djangoFetch(DJANGO_ENDPOINTS.PROJECTS.DETAIL(id), {
         method: 'PATCH',
         requiresAuth: true,
         body: JSON.stringify(jsonBody),

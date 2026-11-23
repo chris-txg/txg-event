@@ -14,6 +14,7 @@ import {
 } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { SurveyDetail } from '@/features/surveys/types/survey.types';
+import { APP_ROUTES } from '@/config/endpoints';
 
 export interface SurveyShareSectionProps {
   survey: SurveyDetail;
@@ -29,7 +30,8 @@ export function SurveyShareSection({ survey }: SurveyShareSectionProps) {
   const [isCopied, setIsCopied] = useState(false);
   const [copyError, setCopyError] = useState<string | null>(null);
 
-  const shareUrl = origin ? `${origin}/s/${survey.id}` : `/s/${survey.id}`;
+  const respondentPath = APP_ROUTES.RESPONDENT_SURVEY(survey.id);
+  const shareUrl = origin ? `${origin}${respondentPath}` : respondentPath;
 
   const isDraft = survey.status === 'draft';
   const isClosed = survey.status === 'closed';

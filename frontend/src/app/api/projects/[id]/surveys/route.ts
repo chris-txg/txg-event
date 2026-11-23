@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { djangoFetch } from '@/lib/api/django-client';
+import { DJANGO_ENDPOINTS } from '@/config/endpoints';
 
 /**
  * GET /api/projects/[id]/surveys
@@ -29,7 +30,7 @@ export async function GET(
     }
 
     const queryString = forwardParams.toString();
-    const endpoint = `/api/projects/${id}/surveys/${queryString ? `?${queryString}` : ''}`;
+    const endpoint = DJANGO_ENDPOINTS.PROJECTS.SURVEYS(id, queryString);
 
     const res = await djangoFetch(endpoint, {
       method: 'GET',

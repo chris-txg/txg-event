@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { djangoFetch } from '@/lib/api/django-client';
+import { DJANGO_ENDPOINTS } from '@/config/endpoints';
 
 /**
  * GET /api/surveys/[surveyId]
@@ -17,7 +18,7 @@ export async function GET(
       return NextResponse.json({ detail: 'Survey ID is required.' }, { status: 400 });
     }
 
-    const res = await djangoFetch(`/api/surveys/${surveyId}/`, {
+    const res = await djangoFetch(DJANGO_ENDPOINTS.SURVEYS.DETAIL(surveyId), {
       method: 'GET',
       requiresAuth: true,
     });
@@ -49,7 +50,7 @@ export async function PATCH(
 
     const jsonBody = await request.json();
 
-    const res = await djangoFetch(`/api/surveys/${surveyId}/`, {
+    const res = await djangoFetch(DJANGO_ENDPOINTS.SURVEYS.DETAIL(surveyId), {
       method: 'PATCH',
       requiresAuth: true,
       body: JSON.stringify(jsonBody),
@@ -80,7 +81,7 @@ export async function DELETE(
       return NextResponse.json({ detail: 'Survey ID is required.' }, { status: 400 });
     }
 
-    const res = await djangoFetch(`/api/surveys/${surveyId}/`, {
+    const res = await djangoFetch(DJANGO_ENDPOINTS.SURVEYS.DETAIL(surveyId), {
       method: 'DELETE',
       requiresAuth: true,
     });

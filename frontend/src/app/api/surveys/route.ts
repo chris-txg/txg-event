@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { djangoFetch } from '@/lib/api/django-client';
+import { DJANGO_ENDPOINTS } from '@/config/endpoints';
 
 /**
  * GET /api/surveys
@@ -23,7 +24,7 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    const endpoint = `/api/surveys/?${forwardParams.toString()}`;
+    const endpoint = `${DJANGO_ENDPOINTS.SURVEYS.LIST_CREATE}?${forwardParams.toString()}`;
     const res = await djangoFetch(endpoint, {
       method: 'GET',
       requiresAuth: true,
@@ -48,7 +49,7 @@ export async function POST(request: NextRequest) {
   try {
     const jsonBody = await request.json();
 
-    const res = await djangoFetch('/api/surveys/', {
+    const res = await djangoFetch(DJANGO_ENDPOINTS.SURVEYS.LIST_CREATE, {
       method: 'POST',
       requiresAuth: true,
       body: JSON.stringify(jsonBody),

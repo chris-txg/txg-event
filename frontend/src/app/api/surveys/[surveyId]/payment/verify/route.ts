@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { djangoFetch } from '@/lib/api/django-client';
+import { DJANGO_ENDPOINTS } from '@/config/endpoints';
 
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -64,7 +65,7 @@ export async function POST(
       );
     }
 
-    const res = await djangoFetch(`/api/surveys/${encodeURIComponent(cleanId)}/payment/verify/`, {
+    const res = await djangoFetch(DJANGO_ENDPOINTS.SURVEYS.PAYMENT_VERIFY(cleanId), {
       method: 'POST',
       requiresAuth: true,
       body: JSON.stringify({

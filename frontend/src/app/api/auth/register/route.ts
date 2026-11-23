@@ -1,13 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { setAuthCookies } from '@/lib/auth/cookies';
-
-const DJANGO_API_URL = process.env.DJANGO_API_URL || 'http://localhost:8000';
+import { DJANGO_BASE_URL, DJANGO_ENDPOINTS } from '@/config/endpoints';
 
 export async function POST(request: NextRequest) {
   try {
     const payload = await request.json();
 
-    const res = await fetch(`${DJANGO_API_URL}/api/auth/register/`, {
+    const res = await fetch(`${DJANGO_BASE_URL}${DJANGO_ENDPOINTS.AUTH.REGISTER}`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',

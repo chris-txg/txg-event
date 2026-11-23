@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { djangoFetch } from '@/lib/api/django-client';
+import { DJANGO_ENDPOINTS } from '@/config/endpoints';
 
 /**
  * DELETE /api/choices/[choiceId]
@@ -16,7 +17,7 @@ export async function DELETE(
       return NextResponse.json({ detail: 'Choice ID is required.' }, { status: 400 });
     }
 
-    const res = await djangoFetch(`/api/choices/${choiceId}/`, {
+    const res = await djangoFetch(DJANGO_ENDPOINTS.CHOICES.DETAIL(choiceId), {
       method: 'DELETE',
       requiresAuth: true,
     });

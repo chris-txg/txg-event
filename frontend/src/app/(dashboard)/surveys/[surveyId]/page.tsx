@@ -25,6 +25,7 @@ import { DeleteSurveyModal } from '@/features/surveys/components/DeleteSurveyMod
 import { QuestionBuilder } from '@/features/surveys/components/QuestionBuilder';
 import { SurveyPublishSection } from '@/features/surveys/components/SurveyPublishSection';
 import { SurveyShareSection } from '@/features/surveys/components/SurveyShareSection';
+import { SurveyAnalyticsSection } from '@/features/surveys/components/SurveyAnalyticsSection';
 import { Spinner } from '@/components/ui/Spinner';
 import { Alert } from '@/components/ui/Alert';
 
@@ -33,6 +34,7 @@ function SurveyDetailContent() {
   const surveyId = params?.surveyId as string;
   const router = useRouter();
 
+  const [activeTab, setActiveTab] = useState<'builder' | 'analytics'>('builder');
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
 
   const {
@@ -269,19 +271,71 @@ function SurveyDetailContent() {
         </div>
       </div>
 
-      {/* Survey Publishing & Lifecycle Section */}
-      <SurveyPublishSection
-        survey={survey}
-        onSurveyUpdated={() => {
-          refetch();
-        }}
-      />
+      {/* Primary Section Navigation Tabs */}
+      <div className="flex items-center gap-2 border-b border-[#E9DDE1] pb-px">
+        <button
+          type="button"
+          onClick={() => setActiveTab('builder')}
+          className={`flex items-center gap-2 px-4 py-2.5 text-xs font-bold border-b-2 transition-all cursor-pointer ${
+            activeTab === 'builder'
+              ? 'border-[#762D46] text-[#762D46]'
+              : 'border-transparent text-stone-500 hover:text-stone-800'
+          }`}
+        >
+          <Edit3 className="w-4 h-4" />
+          <span>Builder & Lifecycle</span>
+        </button>
 
-      {/* Direct Respondent Sharing & Distribution Section */}
-      <SurveyShareSection survey={survey} />
+        <button
+          type="button"
+          onClick={() => setActiveTab('analytics')}
+          className={`flex items-center gap-2 px-4 py-2.5 text-xs font-bold border-b-2 transition-all cursor-pointer ${
+            activeTab === 'analytics'
+              ? 'border-[#762D46] text-[#762D46]'
+              : 'border-transparent text-stone-500 hover:text-stone-800'
+          }`}
+        >
+          <ClipboardList className="w-4 h-4" />
+          <span>Analytics & Submissions</span>
+          <span
+            className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+              activeTab === 'analytics'
+                ? 'bg-[#762D46] text-white'
+                : 'bg-stone-200 text-stone-700'
+            }`}
+          >
+            {survey.response_count ?? 0}
+          </span>
+        </button>
+      </div>
 
-      {/* Survey Question Builder */}
-      <QuestionBuilder survey={survey} />
+      {/* Tab Panels */}
+      {activeTab === 'builder' ? (
+        <div className="space-y-8">
+          {/* Survey Publishing & Lifecycle Section */}
+          <SurveyPublishSection
+            survey={survey}
+            onSurveyUpdated={() => {
+              refetch();
+            }}
+            onNavigateToAnalytics={() => setActiveTab('analytics')}
+          />
+
+          {/* Direct Respondent Sharing & Distribution Section */}
+          <SurveyShareSection survey={survey} />
+
+          {/* Survey Question Builder */}
+          <QuestionBuilder survey={survey} />
+        </div>
+      ) : (
+        /* Analytics & Responses Dashboard */
+        <SurveyAnalyticsSection
+          survey={survey}
+          onCopyShareLink={() => {
+            setActiveTab('builder');
+          }}
+        />
+      )}
 
       {/* Delete Survey Confirmation Modal */}
       <DeleteSurveyModal

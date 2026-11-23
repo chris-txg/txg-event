@@ -29,6 +29,11 @@ import type {
   SurveyPaymentOrderResponse,
   SurveyPaymentVerifyPayload,
   SurveyPaymentVerifyResponse,
+  SurveyPricingOption,
+  SurveyPublishPayload,
+  SurveyPaymentOrderPayload,
+  SurveyAnalyticsData,
+  SurveyResponseDetail,
 } from '@/features/surveys/types/survey.types';
 
 // =================================================================
@@ -114,6 +119,10 @@ export const surveyKeys = {
   publics: () => [...surveyKeys.all, 'public'] as const,
   public: (surveyId: string, isAuthenticated: boolean) =>
     [...surveyKeys.publics(), surveyId, isAuthenticated] as const,
+  pricingOptions: () => [...surveyKeys.all, 'pricing-options'] as const,
+  analytics: (surveyId: string) => [...surveyKeys.all, 'analytics', surveyId] as const,
+  responses: (surveyId: string, page = 1, pageSize = 20) =>
+    [...surveyKeys.all, 'responses', surveyId, { page, pageSize }] as const,
 };
 
 // =================================================================
@@ -774,12 +783,12 @@ export function useSubmitPublicSurvey(
 
 export interface PublishSurveyVariables {
   surveyId: string;
+  payload?: SurveyPublishPayload;
 }
 
 /**
- * Publishes a survey, opening it to receive submissions.
- * Requires that payment has been completed and at least one question exists.
- * If payment is required, backend returns HTTP 402 with code 'PAYMENT_REQUIRED'.
+ * Publishes a survey, making it active for respondents.
+ * Supports optional pricing tier selection.
  * Automatic retries are disabled (retry: false).
  */
 export function usePublishSurvey(
@@ -790,7 +799,7 @@ export function usePublishSurvey(
 
   return useMutation({
     ...restOptions,
-    mutationFn: async ({ surveyId }: PublishSurveyVariables) => {
+    mutationFn: async ({ surveyId, payload }: PublishSurveyVariables) => {
       const cleanId = surveyId ? surveyId.trim() : '';
       if (!cleanId) {
         throw new SurveyApiError('Survey ID is required to publish.', 400, {
@@ -798,7 +807,7 @@ export function usePublishSurvey(
         });
       }
 
-      const res = await surveyClientService.publishSurvey(cleanId);
+      const res = await surveyClientService.publishSurvey(cleanId, payload);
       if (!res.ok || !res.data) {
         throw parseSurveyApiError(res.error, res.status, 'Failed to publish survey.');
       }
@@ -808,6 +817,7 @@ export function usePublishSurvey(
       await queryClient.invalidateQueries({ queryKey: surveyKeys.detail(variables.surveyId.trim()) });
       await queryClient.invalidateQueries({ queryKey: surveyKeys.lists() });
       await queryClient.invalidateQueries({ queryKey: surveyKeys.projectLists() });
+      await queryClient.invalidateQueries({ queryKey: surveyKeys.pricingOptions() });
 
       if (onSuccess) {
         await onSuccess(data, variables, onMutateResult, context);
@@ -863,6 +873,7 @@ export function useCloseSurvey(
 
 export interface CreateSurveyPaymentOrderVariables {
   surveyId: string;
+  payload?: SurveyPaymentOrderPayload;
 }
 
 /**
@@ -880,7 +891,7 @@ export function useCreateSurveyPaymentOrder(
 
   return useMutation({
     ...restOptions,
-    mutationFn: async ({ surveyId }: CreateSurveyPaymentOrderVariables) => {
+    mutationFn: async ({ surveyId, payload }: CreateSurveyPaymentOrderVariables) => {
       const cleanId = surveyId ? surveyId.trim() : '';
       if (!cleanId) {
         throw new SurveyApiError('Survey ID is required to create payment order.', 400, {
@@ -888,7 +899,7 @@ export function useCreateSurveyPaymentOrder(
         });
       }
 
-      const res = await surveyClientService.createSurveyPaymentOrder(cleanId);
+      const res = await surveyClientService.createSurveyPaymentOrder(cleanId, payload);
       if (!res.ok || !res.data) {
         throw parseSurveyApiError(res.error, res.status, 'Failed to create payment order.');
       }
@@ -936,6 +947,7 @@ export function useVerifySurveyPayment(
     onSuccess: async (data, variables, onMutateResult, context) => {
       // Invalidate survey detail so is_paid reflects immediately
       await queryClient.invalidateQueries({ queryKey: surveyKeys.detail(variables.surveyId.trim()) });
+      await queryClient.invalidateQueries({ queryKey: surveyKeys.pricingOptions() });
 
       if (onSuccess) {
         await onSuccess(data, variables, onMutateResult, context);
@@ -944,4 +956,80 @@ export function useVerifySurveyPayment(
     retry: false,
   });
 }
+
+/**
+ * Hook to fetch available pricing options and free credit usage for survey publishing.
+ */
+export function useSurveyPricingOptions(
+  options?: Omit<UseQueryOptions<SurveyPricingOption[], SurveyApiError>, 'queryKey' | 'queryFn'>
+) {
+  return useQuery({
+    queryKey: surveyKeys.pricingOptions(),
+    queryFn: async () => {
+      const res = await surveyClientService.getPricingOptions();
+      if (!res.ok || !res.data) {
+        throw parseSurveyApiError(res.error, res.status, 'Failed to load pricing options.');
+      }
+      return res.data;
+    },
+    staleTime: 60 * 1000,
+    ...options,
+  });
+}
+
+/**
+ * Hook to fetch aggregated survey analytics data.
+ */
+export function useSurveyAnalytics(
+  surveyId: string,
+  options?: Omit<UseQueryOptions<SurveyAnalyticsData, SurveyApiError>, 'queryKey' | 'queryFn'>
+) {
+  const cleanId = surveyId ? surveyId.trim() : '';
+
+  return useQuery({
+    queryKey: surveyKeys.analytics(cleanId),
+    queryFn: async () => {
+      if (!cleanId) {
+        throw new SurveyApiError('Survey ID is required.', 400, { detail: 'Survey ID is required.' });
+      }
+      const res = await surveyClientService.getSurveyAnalytics(cleanId);
+      if (!res.ok || !res.data) {
+        throw parseSurveyApiError(res.error, res.status, 'Failed to load survey analytics.');
+      }
+      return res.data;
+    },
+    enabled: Boolean(cleanId),
+    staleTime: 30 * 1000,
+    ...options,
+  });
+}
+
+/**
+ * Hook to fetch individual survey responses.
+ */
+export function useSurveyResponses(
+  surveyId: string,
+  page: number = 1,
+  options?: Omit<UseQueryOptions<PaginatedResponse<SurveyResponseDetail>, SurveyApiError>, 'queryKey' | 'queryFn'>
+) {
+  const cleanId = surveyId ? surveyId.trim() : '';
+
+  return useQuery({
+    queryKey: surveyKeys.responses(cleanId, page),
+    queryFn: async () => {
+      if (!cleanId) {
+        throw new SurveyApiError('Survey ID is required.', 400, { detail: 'Survey ID is required.' });
+      }
+      const res = await surveyClientService.getSurveyResponses(cleanId, page);
+      if (!res.ok || !res.data) {
+        throw parseSurveyApiError(res.error, res.status, 'Failed to load survey responses.');
+      }
+      return res.data;
+    },
+    enabled: Boolean(cleanId),
+    staleTime: 30 * 1000,
+    ...options,
+  });
+}
+
 

@@ -1,9 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { djangoFetch } from '@/lib/api/django-client';
 import { User } from '@/features/authentication/types/auth.types';
+import { DJANGO_ENDPOINTS } from '@/config/endpoints';
 
 export async function GET() {
-  const res = await djangoFetch<User>('/api/auth/me/', {
+  const res = await djangoFetch<User>(DJANGO_ENDPOINTS.AUTH.ME, {
     method: 'GET',
     requiresAuth: true,
   });
@@ -19,7 +20,7 @@ export async function PATCH(request: NextRequest) {
   try {
     const body = await request.json();
 
-    const res = await djangoFetch<User>('/api/auth/me/', {
+    const res = await djangoFetch<User>(DJANGO_ENDPOINTS.AUTH.ME, {
       method: 'PATCH',
       body: JSON.stringify(body),
       requiresAuth: true,

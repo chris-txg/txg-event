@@ -18,6 +18,7 @@ import { RespondentSuccessCard } from './RespondentSuccessCard';
 import { Spinner } from '@/components/ui/Spinner';
 import { Alert } from '@/components/ui/Alert';
 import { RotateCcw } from 'lucide-react';
+import { APP_ROUTES } from '@/config/endpoints';
 
 export interface RespondentSurveyContainerProps {
   surveyId: string;
@@ -25,7 +26,7 @@ export interface RespondentSurveyContainerProps {
 
 export function RespondentSurveyContainer({ surveyId }: RespondentSurveyContainerProps) {
   const cleanSurveyId = typeof surveyId === 'string' ? surveyId.trim() : '';
-  const loginUrl = `/login?redirect=${encodeURIComponent('/s/' + cleanSurveyId)}`;
+  const loginUrl = `${APP_ROUTES.LOGIN}?redirect=${encodeURIComponent(APP_ROUTES.RESPONDENT_SURVEY(cleanSurveyId))}`;
 
   const { isAuthenticated, isLoading: isAuthLoading } = useAuth();
 
@@ -161,11 +162,36 @@ export function RespondentSurveyContainer({ surveyId }: RespondentSurveyContaine
 
     // Gate C: Inactive or Closed survey gate
     if (!survey.is_active) {
+      let inactiveTitle = survey.status === 'closed' ? 'Survey Closed' : 'Survey Scheduled / Inactive';
+      let inactiveMsg = 'This survey is not currently accepting responses.';
+
+      if (survey.start_date && new Date(survey.start_date).getTime() > Date.now()) {
+        inactiveTitle = 'Survey Not Open Yet';
+        const formattedStart = new Date(survey.start_date).toLocaleString(undefined, {
+          month: 'short',
+          day: 'numeric',
+          year: 'numeric',
+          hour: '2-digit',
+          minute: '2-digit',
+        });
+        inactiveMsg = `This survey is scheduled to open on ${formattedStart}. Please return once the response window begins.`;
+      } else if (survey.end_date && new Date(survey.end_date).getTime() < Date.now()) {
+        inactiveTitle = 'Survey Concluded';
+        const formattedEnd = new Date(survey.end_date).toLocaleString(undefined, {
+          month: 'short',
+          day: 'numeric',
+          year: 'numeric',
+        });
+        inactiveMsg = `This survey concluded on ${formattedEnd} and is no longer accepting submissions.`;
+      } else if (survey.status === 'closed') {
+        inactiveMsg = 'This survey has been closed by the event organizer. Thank you for your interest.';
+      }
+
       return (
         <div className="py-8 sm:py-12 animate-fadeIn">
           <RespondentClosedCard
-            title={`Survey ${survey.status === 'closed' ? 'Closed' : 'Inactive'}`}
-            message="This survey is not currently accepting responses."
+            title={inactiveTitle}
+            message={inactiveMsg}
           />
         </div>
       );

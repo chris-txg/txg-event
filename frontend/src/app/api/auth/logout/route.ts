@@ -1,7 +1,6 @@
 import { NextResponse } from 'next/server';
 import { clearAuthCookies, getServerAuthTokens } from '@/lib/auth/cookies';
-
-const DJANGO_API_URL = process.env.DJANGO_API_URL || 'http://localhost:8000';
+import { DJANGO_BASE_URL, DJANGO_ENDPOINTS } from '@/config/endpoints';
 
 export async function POST() {
   try {
@@ -18,7 +17,7 @@ export async function POST() {
           headers['Authorization'] = `Bearer ${access}`;
         }
 
-        await fetch(`${DJANGO_API_URL}/api/auth/logout/`, {
+        await fetch(`${DJANGO_BASE_URL}${DJANGO_ENDPOINTS.AUTH.LOGOUT}`, {
           method: 'POST',
           headers,
           body: JSON.stringify({ refresh }),

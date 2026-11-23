@@ -4,6 +4,7 @@ import React, { useState } from 'react';
 import { CreditCard, CheckCircle2, AlertTriangle, X, ShieldCheck } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { Alert } from '@/components/ui/Alert';
+import { EXTERNAL_SCRIPTS } from '@/config/endpoints';
 import {
   SurveyDetail,
   SurveyPaymentOrderResponse,
@@ -54,7 +55,7 @@ function loadRazorpayScript(): Promise<boolean> {
     if (window.Razorpay) return resolve(true);
 
     const existingScript = document.querySelector(
-      'script[src="https://checkout.razorpay.com/v1/checkout.js"]'
+      `script[src="${EXTERNAL_SCRIPTS.RAZORPAY_CHECKOUT}"]`
     );
     if (existingScript) {
       existingScript.addEventListener('load', () => resolve(true));
@@ -63,7 +64,7 @@ function loadRazorpayScript(): Promise<boolean> {
     }
 
     const script = document.createElement('script');
-    script.src = 'https://checkout.razorpay.com/v1/checkout.js';
+    script.src = EXTERNAL_SCRIPTS.RAZORPAY_CHECKOUT;
     script.async = true;
     script.onload = () => resolve(true);
     script.onerror = () => resolve(false);
@@ -220,10 +221,10 @@ export function RazorpayPaymentModal({
           </div>
           <div>
             <h3 id="payment-modal-title" className="text-lg font-bold text-[#30232A]">
-              Survey Publishing Fee
+              {order.pricing_option_name ? `${order.pricing_option_name} Activation` : 'Survey Publishing Fee'}
             </h3>
             <p className="text-xs text-stone-500">
-              One-time publishing activation required by the platform.
+              Publishing tier activation powered by Razorpay.
             </p>
           </div>
         </div>
@@ -234,6 +235,14 @@ export function RazorpayPaymentModal({
             <span className="text-stone-500">Survey</span>
             <span className="font-semibold text-stone-800 truncate max-w-xs">{survey.title}</span>
           </div>
+          {order.pricing_option_name && (
+            <div className="flex items-center justify-between">
+              <span className="text-stone-500">Selected Plan</span>
+              <span className="font-semibold text-[#762D46] bg-[#F4E5EA] px-2 py-0.5 rounded">
+                {order.pricing_option_name}
+              </span>
+            </div>
+          )}
           <div className="flex items-center justify-between">
             <span className="text-stone-500">Order ID</span>
             <code className="font-mono text-stone-700 bg-white px-2 py-0.5 rounded border border-stone-200">

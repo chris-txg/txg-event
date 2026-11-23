@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from 'next/server';
 import { COOKIE_NAMES } from '@/lib/auth/cookies';
+import { APP_ROUTES } from '@/config/endpoints';
 
 export function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
@@ -20,14 +21,14 @@ export function proxy(request: NextRequest) {
 
   if (isProtectedPath && !hasSession) {
     const loginUrl = request.nextUrl.clone();
-    loginUrl.pathname = '/login';
+    loginUrl.pathname = APP_ROUTES.LOGIN;
     loginUrl.searchParams.set('redirect', pathname);
     return NextResponse.redirect(loginUrl);
   }
 
   if (isAuthPath && hasSession) {
     const servicesUrl = request.nextUrl.clone();
-    servicesUrl.pathname = '/services';
+    servicesUrl.pathname = APP_ROUTES.SERVICES;
     return NextResponse.redirect(servicesUrl);
   }
 

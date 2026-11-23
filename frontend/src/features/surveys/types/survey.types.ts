@@ -273,11 +273,53 @@ export interface PaginatedResponse<T> {
 // =================================================================
 
 /**
+ * Survey pricing option model contract:
+ * GET /api/surveys/pricing-options/
+ */
+export interface SurveyPricingOption {
+  id: string;
+  name: string;
+  code: string;
+  description: string;
+  price: string;
+  currency: string;
+  is_free: boolean;
+  free_limit_per_user: number;
+  is_active: boolean;
+  display_order: number;
+  features: string[];
+  user_used_count: number;
+  user_remaining_count: number;
+  is_available_for_user: boolean;
+}
+
+/**
+ * Request payload for publishing a survey:
+ * POST /api/surveys/<id>/publish/
+ */
+export interface SurveyPublishPayload {
+  pricing_option_code?: string;
+  pricing_option_id?: string;
+}
+
+/**
+ * Request payload for creating a payment order:
+ * POST /api/surveys/<id>/payment/order/
+ */
+export interface SurveyPaymentOrderPayload {
+  pricing_option_code?: string;
+  pricing_option_id?: string;
+}
+
+/**
  * Response payload returned upon successful survey publication:
  * POST /api/surveys/<id>/publish/
  */
 export interface PublishSurveyResponse {
   message: string;
+  status?: string;
+  is_paid?: boolean;
+  pricing_option?: string | null;
 }
 
 /**
@@ -289,6 +331,7 @@ export interface PaymentRequiredErrorPayload {
   code: 'PAYMENT_REQUIRED';
   survey_id: string;
   payment_order_url: string;
+  pricing_options_url?: string;
 }
 
 /**
@@ -312,6 +355,8 @@ export interface SurveyPaymentOrderResponse {
   key_id: string;
   survey_id: string;
   survey_title: string;
+  pricing_option_code?: string;
+  pricing_option_name?: string;
 }
 
 /**
@@ -335,5 +380,50 @@ export interface SurveyPaymentVerifyResponse {
   survey_id: string;
   is_paid: boolean;
   payment_id: string;
+}
+
+// =================================================================
+// 7. Analytics Contracts (services.py:140-185, views.py:380-420)
+// =================================================================
+
+export interface ChoiceAnalyticsItem {
+  choice_id?: string;
+  option?: string;
+  text?: string;
+  count: number;
+  percentage: number;
+}
+
+export interface NumericAnalyticsStats {
+  average?: number | null;
+  avg?: number | null;
+  median?: number | null;
+  min?: number | null;
+  max?: number | null;
+}
+
+export interface QuestionAnalyticsItem {
+  question_id: string;
+  text: string;
+  question_type: QuestionType;
+  is_required?: boolean;
+  answered_count?: number;
+  total_answers?: number;
+  distribution?: ChoiceAnalyticsItem[];
+  choices?: ChoiceAnalyticsItem[];
+  summary?: NumericAnalyticsStats;
+  numeric_stats?: NumericAnalyticsStats;
+  recent_samples?: string[];
+  sample_responses?: string[];
+}
+
+export interface SurveyAnalyticsData {
+  survey_id: string;
+  survey_title: string;
+  status: SurveyStatus;
+  visibility: SurveyVisibility;
+  is_active: boolean;
+  total_responses: number;
+  questions: QuestionAnalyticsItem[];
 }
 

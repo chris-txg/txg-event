@@ -4,8 +4,9 @@ import {
   defaultHttpOnlyCookieOptions,
   defaultPublicCookieOptions,
 } from '@/lib/auth/cookies';
+import { DJANGO_BASE_URL, DJANGO_ENDPOINTS } from '@/config/endpoints';
 
-const DJANGO_API_URL = process.env.DJANGO_API_URL || 'http://localhost:8000';
+const DJANGO_API_URL = DJANGO_BASE_URL;
 
 interface DjangoRequestOptions extends RequestInit {
   requiresAuth?: boolean;
@@ -23,7 +24,7 @@ let activeRefreshPromise: Promise<{ access: string; refresh: string } | null> | 
 
 async function executeTokenRefresh(refreshToken: string): Promise<{ access: string; refresh: string } | null> {
   try {
-    const res = await fetch(`${DJANGO_API_URL}/api/auth/token/refresh/`, {
+    const res = await fetch(`${DJANGO_API_URL}${DJANGO_ENDPOINTS.AUTH.TOKEN_REFRESH}`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',

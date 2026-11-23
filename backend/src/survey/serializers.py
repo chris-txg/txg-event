@@ -420,6 +420,7 @@ class SurveyPaymentOrderResponseSerializer(serializers.Serializer):
     key_id = serializers.CharField()
     survey_id = serializers.UUIDField()
     survey_title = serializers.CharField()
+    pricing_option_code = serializers.CharField(required=False, allow_blank=True)
     pricing_option_name = serializers.CharField(required=False, allow_blank=True)
     coupon_code = serializers.CharField(required=False, allow_blank=True)
     discount_amount = serializers.DecimalField(max_digits=10, decimal_places=2, required=False)

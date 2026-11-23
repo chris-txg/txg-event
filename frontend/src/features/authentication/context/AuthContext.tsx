@@ -4,6 +4,7 @@ import React, { createContext, useContext, useCallback } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { User } from '@/features/authentication/types/auth.types';
 import { bffFetch } from '@/lib/api/bff-client';
+import { BFF_ENDPOINTS, APP_ROUTES } from '@/config/endpoints';
 import { useRouter } from 'next/navigation';
 
 interface AuthContextValue {
@@ -25,7 +26,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const { data: user, isLoading, isError } = useQuery<User | null>({
     queryKey: ['auth', 'me'],
     queryFn: async () => {
-      const res = await bffFetch<{ user: User }>('/api/auth/me');
+      const res = await bffFetch<{ user: User }>(BFF_ENDPOINTS.AUTH.ME);
       if (res.ok && res.data?.user) {
         return res.data.user;
       }
@@ -47,10 +48,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [queryClient]);
 
   const logout = useCallback(async () => {
-    await bffFetch('/api/auth/logout', { method: 'POST' });
+    await bffFetch(BFF_ENDPOINTS.AUTH.LOGOUT, { method: 'POST' });
     setUser(null);
     queryClient.clear();
-    router.push('/login');
+    router.push(APP_ROUTES.LOGIN);
     router.refresh();
   }, [queryClient, router, setUser]);
 

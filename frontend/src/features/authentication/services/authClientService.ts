@@ -1,4 +1,5 @@
 import { bffFetch, BffResponse } from '@/lib/api/bff-client';
+import { BFF_ENDPOINTS } from '@/config/endpoints';
 import { User, AuthResponse } from '@/features/authentication/types/auth.types';
 import { LoginFormData } from '@/features/authentication/schemas/login.schema';
 import {
@@ -14,7 +15,7 @@ import {
 
 export const authClientService = {
   async login(payload: LoginFormData): Promise<BffResponse<AuthResponse>> {
-    return bffFetch<AuthResponse>('/api/auth/login', {
+    return bffFetch<AuthResponse>(BFF_ENDPOINTS.AUTH.LOGIN, {
       method: 'POST',
       body: JSON.stringify(payload),
     });
@@ -36,7 +37,7 @@ export const authClientService = {
         ...(city ? { city } : {}),
       },
     };
-    return bffFetch<AuthResponse>('/api/auth/register', {
+    return bffFetch<AuthResponse>(BFF_ENDPOINTS.AUTH.REGISTER, {
       method: 'POST',
       body: JSON.stringify(payload),
     });
@@ -71,7 +72,7 @@ export const authClientService = {
         ...(city ? { city } : {}),
       },
     };
-    return bffFetch<AuthResponse>('/api/auth/register', {
+    return bffFetch<AuthResponse>(BFF_ENDPOINTS.AUTH.REGISTER, {
       method: 'POST',
       body: JSON.stringify(payload),
     });
@@ -105,47 +106,47 @@ export const authClientService = {
         city,
       },
     };
-    return bffFetch<AuthResponse>('/api/auth/register', {
+    return bffFetch<AuthResponse>(BFF_ENDPOINTS.AUTH.REGISTER, {
       method: 'POST',
       body: JSON.stringify(payload),
     });
   },
 
   async logout(): Promise<BffResponse<{ message: string }>> {
-    return bffFetch<{ message: string }>('/api/auth/logout', {
+    return bffFetch<{ message: string }>(BFF_ENDPOINTS.AUTH.LOGOUT, {
       method: 'POST',
     });
   },
 
   async getMe(): Promise<BffResponse<{ user: User }>> {
-    return bffFetch<{ user: User }>('/api/auth/me', {
+    return bffFetch<{ user: User }>(BFF_ENDPOINTS.AUTH.ME, {
       method: 'GET',
     });
   },
 
   async updateMe(payload: Partial<User>): Promise<BffResponse<{ user: User }>> {
-    return bffFetch<{ user: User }>('/api/auth/me', {
+    return bffFetch<{ user: User }>(BFF_ENDPOINTS.AUTH.ME, {
       method: 'PATCH',
       body: JSON.stringify(payload),
     });
   },
 
   async forgotPassword(payload: ForgotPasswordFormData): Promise<BffResponse<{ message: string }>> {
-    return bffFetch<{ message: string }>('/api/auth/password/reset', {
+    return bffFetch<{ message: string }>(BFF_ENDPOINTS.AUTH.PASSWORD_RESET, {
       method: 'POST',
       body: JSON.stringify(payload),
     });
   },
 
   async resetPassword(payload: ResetPasswordConfirmFormData): Promise<BffResponse<{ message: string }>> {
-    return bffFetch<{ message: string }>('/api/auth/password/confirm', {
+    return bffFetch<{ message: string }>(BFF_ENDPOINTS.AUTH.PASSWORD_RESET_CONFIRM, {
       method: 'POST',
       body: JSON.stringify(payload),
     });
   },
 
   async changePassword(payload: ChangePasswordFormData): Promise<BffResponse<{ message: string }>> {
-    return bffFetch<{ message: string }>('/api/auth/password/change', {
+    return bffFetch<{ message: string }>(BFF_ENDPOINTS.AUTH.PASSWORD_CHANGE, {
       method: 'POST',
       body: JSON.stringify(payload),
     });

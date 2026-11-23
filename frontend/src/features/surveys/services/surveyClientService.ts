@@ -1,4 +1,5 @@
 import { bffFetch, BffResponse } from '@/lib/api/bff-client';
+import { BFF_ENDPOINTS } from '@/config/endpoints';
 import {
   SurveyListItem,
   SurveyDetail,
@@ -19,6 +20,11 @@ import {
   SurveyPaymentOrderResponse,
   SurveyPaymentVerifyPayload,
   SurveyPaymentVerifyResponse,
+  SurveyPricingOption,
+  SurveyPublishPayload,
+  SurveyPaymentOrderPayload,
+  SurveyAnalyticsData,
+  SurveyResponseDetail,
 } from '@/features/surveys/types/survey.types';
 
 export interface SurveyListFilters {
@@ -46,7 +52,7 @@ export const surveyClientService = {
     if (filters?.visibility) params.set('visibility', filters.visibility);
 
     const queryString = params.toString();
-    const endpoint = `/api/surveys${queryString ? `?${queryString}` : ''}`;
+    const endpoint = `${BFF_ENDPOINTS.SURVEYS.LIST}${queryString ? `?${queryString}` : ''}`;
     return bffFetch<PaginatedResponse<SurveyListItem>>(endpoint, { method: 'GET' });
   },
 
@@ -64,7 +70,7 @@ export const surveyClientService = {
     if (pageSize) params.set('page_size', pageSize.toString());
 
     const queryString = params.toString();
-    const endpoint = `/api/projects/${projectId}/surveys${queryString ? `?${queryString}` : ''}`;
+    const endpoint = BFF_ENDPOINTS.PROJECTS.SURVEYS(projectId, queryString);
     return bffFetch<PaginatedResponse<SurveyListItem>>(endpoint, { method: 'GET' });
   },
 
@@ -73,7 +79,7 @@ export const surveyClientService = {
    * Invokes Next.js BFF endpoint: GET /api/surveys/[surveyId]
    */
   async getSurveyById(surveyId: string): Promise<BffResponse<SurveyDetail>> {
-    return bffFetch<SurveyDetail>(`/api/surveys/${surveyId}`, { method: 'GET' });
+    return bffFetch<SurveyDetail>(BFF_ENDPOINTS.SURVEYS.DETAIL(surveyId), { method: 'GET' });
   },
 
   /**
@@ -81,7 +87,7 @@ export const surveyClientService = {
    * Invokes Next.js BFF endpoint: POST /api/surveys
    */
   async createSurvey(payload: CreateSurveyPayload): Promise<BffResponse<SurveyDetail>> {
-    return bffFetch<SurveyDetail>('/api/surveys', {
+    return bffFetch<SurveyDetail>(BFF_ENDPOINTS.SURVEYS.LIST, {
       method: 'POST',
       body: JSON.stringify(payload),
     });
@@ -95,7 +101,7 @@ export const surveyClientService = {
     surveyId: string,
     payload: UpdateSurveyPayload
   ): Promise<BffResponse<SurveyDetail>> {
-    return bffFetch<SurveyDetail>(`/api/surveys/${surveyId}`, {
+    return bffFetch<SurveyDetail>(BFF_ENDPOINTS.SURVEYS.DETAIL(surveyId), {
       method: 'PATCH',
       body: JSON.stringify(payload),
     });
@@ -107,7 +113,7 @@ export const surveyClientService = {
    * Invokes Next.js BFF endpoint: DELETE /api/surveys/[surveyId]
    */
   async deleteSurvey(surveyId: string): Promise<BffResponse<unknown>> {
-    return bffFetch<unknown>(`/api/surveys/${surveyId}`, {
+    return bffFetch<unknown>(BFF_ENDPOINTS.SURVEYS.DETAIL(surveyId), {
       method: 'DELETE',
     });
   },
@@ -120,7 +126,7 @@ export const surveyClientService = {
     surveyId: string,
     payload: CreateQuestionPayload
   ): Promise<BffResponse<Question>> {
-    return bffFetch<Question>(`/api/surveys/${surveyId}/questions`, {
+    return bffFetch<Question>(BFF_ENDPOINTS.SURVEYS.QUESTIONS(surveyId), {
       method: 'POST',
       body: JSON.stringify(payload),
     });
@@ -134,7 +140,7 @@ export const surveyClientService = {
     questionId: string,
     payload: UpdateQuestionPayload
   ): Promise<BffResponse<Question>> {
-    return bffFetch<Question>(`/api/questions/${questionId}`, {
+    return bffFetch<Question>(BFF_ENDPOINTS.QUESTIONS.DETAIL(questionId), {
       method: 'PATCH',
       body: JSON.stringify(payload),
     });
@@ -145,7 +151,7 @@ export const surveyClientService = {
    * Invokes Next.js BFF endpoint: DELETE /api/questions/[questionId]
    */
   async deleteQuestion(questionId: string): Promise<BffResponse<unknown>> {
-    return bffFetch<unknown>(`/api/questions/${questionId}`, {
+    return bffFetch<unknown>(BFF_ENDPOINTS.QUESTIONS.DETAIL(questionId), {
       method: 'DELETE',
     });
   },
@@ -158,7 +164,7 @@ export const surveyClientService = {
     questionId: string,
     payload: CreateChoicePayload
   ): Promise<BffResponse<QuestionChoice>> {
-    return bffFetch<QuestionChoice>(`/api/questions/${questionId}/choices`, {
+    return bffFetch<QuestionChoice>(BFF_ENDPOINTS.QUESTIONS.CHOICES(questionId), {
       method: 'POST',
       body: JSON.stringify(payload),
     });
@@ -169,7 +175,7 @@ export const surveyClientService = {
    * Invokes Next.js BFF endpoint: DELETE /api/choices/[choiceId]
    */
   async deleteChoice(choiceId: string): Promise<BffResponse<unknown>> {
-    return bffFetch<unknown>(`/api/choices/${choiceId}`, {
+    return bffFetch<unknown>(BFF_ENDPOINTS.CHOICES.DETAIL(choiceId), {
       method: 'DELETE',
     });
   },
@@ -180,7 +186,7 @@ export const surveyClientService = {
    */
   async getPublicSurvey(surveyId: string): Promise<BffResponse<SurveyDetail>> {
     const cleanId = surveyId ? surveyId.trim() : '';
-    return bffFetch<SurveyDetail>(`/api/public/surveys/${cleanId}`, { method: 'GET' });
+    return bffFetch<SurveyDetail>(BFF_ENDPOINTS.PUBLIC_SURVEYS.DETAIL(cleanId), { method: 'GET' });
   },
 
   /**
@@ -192,9 +198,19 @@ export const surveyClientService = {
     payload: SurveySubmitPayload
   ): Promise<BffResponse<SurveySubmitSuccessResponse>> {
     const cleanId = surveyId ? surveyId.trim() : '';
-    return bffFetch<SurveySubmitSuccessResponse>(`/api/public/surveys/${cleanId}/submit`, {
+    return bffFetch<SurveySubmitSuccessResponse>(BFF_ENDPOINTS.PUBLIC_SURVEYS.SUBMIT(cleanId), {
       method: 'POST',
       body: JSON.stringify(payload),
+    });
+  },
+
+  /**
+   * Retrieves active survey publishing pricing tiers/plans.
+   * Invokes Next.js BFF endpoint: GET /api/surveys/pricing-options
+   */
+  async getPricingOptions(): Promise<BffResponse<SurveyPricingOption[]>> {
+    return bffFetch<SurveyPricingOption[]>(BFF_ENDPOINTS.SURVEYS.PRICING_OPTIONS, {
+      method: 'GET',
     });
   },
 
@@ -203,10 +219,14 @@ export const surveyClientService = {
    * Invokes Next.js BFF endpoint: POST /api/surveys/[surveyId]/publish
    * If payment is required, backend returns HTTP 402 with code PAYMENT_REQUIRED.
    */
-  async publishSurvey(surveyId: string): Promise<BffResponse<PublishSurveyResponse>> {
+  async publishSurvey(
+    surveyId: string,
+    payload?: SurveyPublishPayload
+  ): Promise<BffResponse<PublishSurveyResponse>> {
     const cleanId = surveyId ? surveyId.trim() : '';
-    return bffFetch<PublishSurveyResponse>(`/api/surveys/${cleanId}/publish`, {
+    return bffFetch<PublishSurveyResponse>(BFF_ENDPOINTS.SURVEYS.PUBLISH(cleanId), {
       method: 'POST',
+      body: payload ? JSON.stringify(payload) : undefined,
     });
   },
 
@@ -216,7 +236,7 @@ export const surveyClientService = {
    */
   async closeSurvey(surveyId: string): Promise<BffResponse<CloseSurveyResponse>> {
     const cleanId = surveyId ? surveyId.trim() : '';
-    return bffFetch<CloseSurveyResponse>(`/api/surveys/${cleanId}/close`, {
+    return bffFetch<CloseSurveyResponse>(BFF_ENDPOINTS.SURVEYS.CLOSE(cleanId), {
       method: 'POST',
     });
   },
@@ -225,10 +245,14 @@ export const surveyClientService = {
    * Creates a Razorpay order to pay the survey publishing fee.
    * Invokes Next.js BFF endpoint: POST /api/surveys/[surveyId]/payment/order
    */
-  async createSurveyPaymentOrder(surveyId: string): Promise<BffResponse<SurveyPaymentOrderResponse>> {
+  async createSurveyPaymentOrder(
+    surveyId: string,
+    payload?: SurveyPaymentOrderPayload
+  ): Promise<BffResponse<SurveyPaymentOrderResponse>> {
     const cleanId = surveyId ? surveyId.trim() : '';
-    return bffFetch<SurveyPaymentOrderResponse>(`/api/surveys/${cleanId}/payment/order`, {
+    return bffFetch<SurveyPaymentOrderResponse>(BFF_ENDPOINTS.SURVEYS.PAYMENT_ORDER(cleanId), {
       method: 'POST',
+      body: payload ? JSON.stringify(payload) : undefined,
     });
   },
 
@@ -241,9 +265,40 @@ export const surveyClientService = {
     payload: SurveyPaymentVerifyPayload
   ): Promise<BffResponse<SurveyPaymentVerifyResponse>> {
     const cleanId = surveyId ? surveyId.trim() : '';
-    return bffFetch<SurveyPaymentVerifyResponse>(`/api/surveys/${cleanId}/payment/verify`, {
+    return bffFetch<SurveyPaymentVerifyResponse>(BFF_ENDPOINTS.SURVEYS.PAYMENT_VERIFY(cleanId), {
       method: 'POST',
       body: JSON.stringify(payload),
     });
+  },
+
+  /**
+   * Fetches aggregated analytics summary for a survey.
+   * Invokes Next.js BFF endpoint: GET /api/surveys/[surveyId]/analytics
+   */
+  async getSurveyAnalytics(surveyId: string): Promise<BffResponse<SurveyAnalyticsData>> {
+    const cleanId = surveyId ? surveyId.trim() : '';
+    return bffFetch<SurveyAnalyticsData>(BFF_ENDPOINTS.SURVEYS.ANALYTICS(cleanId), {
+      method: 'GET',
+    });
+  },
+
+  /**
+   * Fetches paginated individual submissions for a survey.
+   * Invokes Next.js BFF endpoint: GET /api/surveys/[surveyId]/responses?page=<p>&page_size=<s>
+   */
+  async getSurveyResponses(
+    surveyId: string,
+    page = 1,
+    pageSize = 20
+  ): Promise<BffResponse<PaginatedResponse<SurveyResponseDetail>>> {
+    const cleanId = surveyId ? surveyId.trim() : '';
+    const params = new URLSearchParams();
+    if (page) params.set('page', String(page));
+    if (pageSize) params.set('page_size', String(pageSize));
+    const query = params.toString();
+    return bffFetch<PaginatedResponse<SurveyResponseDetail>>(
+      BFF_ENDPOINTS.SURVEYS.RESPONSES(cleanId, query),
+      { method: 'GET' }
+    );
   },
 };

@@ -10,16 +10,21 @@ import {
   CreditCard,
   AlertTriangle,
   Sparkles,
+  Gift,
+  Check,
 } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { Alert } from '@/components/ui/Alert';
+import { Spinner } from '@/components/ui/Spinner';
 import {
   SurveyDetail,
   SurveyPaymentOrderResponse,
+  SurveyPricingOption,
 } from '@/features/surveys/types/survey.types';
 import {
   usePublishSurvey,
   useCreateSurveyPaymentOrder,
+  useSurveyPricingOptions,
   SurveyApiError,
 } from '@/features/surveys/hooks/useSurveys';
 import { RazorpayPaymentModal } from './RazorpayPaymentModal';
@@ -28,9 +33,14 @@ import { CloseSurveyModal } from './CloseSurveyModal';
 export interface SurveyPublishSectionProps {
   survey: SurveyDetail;
   onSurveyUpdated?: () => void;
+  onNavigateToAnalytics?: () => void;
 }
 
-export function SurveyPublishSection({ survey, onSurveyUpdated }: SurveyPublishSectionProps) {
+export function SurveyPublishSection({
+  survey,
+  onSurveyUpdated,
+  onNavigateToAnalytics,
+}: SurveyPublishSectionProps) {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
@@ -38,6 +48,11 @@ export function SurveyPublishSection({ survey, onSurveyUpdated }: SurveyPublishS
   const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
   const [activePaymentOrder, setActivePaymentOrder] = useState<SurveyPaymentOrderResponse | null>(null);
   const [isCloseModalOpen, setIsCloseModalOpen] = useState(false);
+  const [processingPlanCode, setProcessingPlanCode] = useState<string | null>(null);
+
+  const { data: pricingOptions, isLoading: isLoadingPricing } = useSurveyPricingOptions({
+    enabled: survey.status === 'draft',
+  });
 
   const publishMutation = usePublishSurvey();
   const createOrderMutation = useCreateSurveyPaymentOrder();
@@ -47,25 +62,31 @@ export function SurveyPublishSection({ survey, onSurveyUpdated }: SurveyPublishS
   const isPublished = survey.status === 'published';
   const isClosed = survey.status === 'closed';
 
-  const handlePublishClick = async () => {
+  // Handle Free or Already Paid Publishing
+  const handlePublishFreeOrPaid = async (pricingCode?: string) => {
     setErrorMessage(null);
     setSuccessMessage(null);
+    setProcessingPlanCode(pricingCode || 'free');
 
     if (!hasQuestions) {
       setErrorMessage('Cannot publish a survey without questions. Please add at least one question below.');
+      setProcessingPlanCode(null);
       return;
     }
 
     try {
-      const result = await publishMutation.mutateAsync({ surveyId: survey.id });
+      const result = await publishMutation.mutateAsync({
+        surveyId: survey.id,
+        payload: pricingCode ? { pricing_option_code: pricingCode } : undefined,
+      });
       setSuccessMessage(result.message || 'Survey published successfully!');
       if (onSurveyUpdated) onSurveyUpdated();
     } catch (err) {
       if (err instanceof SurveyApiError) {
-        // Check for 402 Payment Required
+        // If backend responds with 402 PAYMENT_REQUIRED, redirect to payment flow
         const originalErr = err.originalError as Record<string, unknown> | undefined;
         if (err.status === 402 || (originalErr && originalErr.code === 'PAYMENT_REQUIRED')) {
-          await initiatePaymentOrder();
+          await initiatePaymentOrder(pricingCode);
           return;
         }
         setErrorMessage(err.message);
@@ -74,12 +95,28 @@ export function SurveyPublishSection({ survey, onSurveyUpdated }: SurveyPublishS
       } else {
         setErrorMessage('Failed to publish survey.');
       }
+    } finally {
+      setProcessingPlanCode(null);
     }
   };
 
-  const initiatePaymentOrder = async () => {
+  // Handle Paid Tier Razorpay Order Creation
+  const initiatePaymentOrder = async (pricingCode?: string) => {
+    setErrorMessage(null);
+    setSuccessMessage(null);
+    setProcessingPlanCode(pricingCode || 'paid');
+
+    if (!hasQuestions) {
+      setErrorMessage('Cannot publish a survey without questions. Please add at least one question below.');
+      setProcessingPlanCode(null);
+      return;
+    }
+
     try {
-      const order = await createOrderMutation.mutateAsync({ surveyId: survey.id });
+      const order = await createOrderMutation.mutateAsync({
+        surveyId: survey.id,
+        payload: pricingCode ? { pricing_option_code: pricingCode } : undefined,
+      });
       setActivePaymentOrder(order);
       setIsPaymentModalOpen(true);
     } catch (orderErr) {
@@ -90,12 +127,18 @@ export function SurveyPublishSection({ survey, onSurveyUpdated }: SurveyPublishS
       } else {
         setErrorMessage('Failed to create payment order. Please try again.');
       }
+    } finally {
+      setProcessingPlanCode(null);
     }
   };
 
   const handlePaymentSuccessAndPublish = async () => {
     try {
-      const result = await publishMutation.mutateAsync({ surveyId: survey.id });
+      const planCode = activePaymentOrder?.pricing_option_code;
+      const result = await publishMutation.mutateAsync({
+        surveyId: survey.id,
+        payload: planCode ? { pricing_option_code: planCode } : undefined,
+      });
       setSuccessMessage(result.message || 'Payment verified and survey published successfully!');
       if (onSurveyUpdated) onSurveyUpdated();
     } catch (pubErr) {
@@ -112,15 +155,17 @@ export function SurveyPublishSection({ survey, onSurveyUpdated }: SurveyPublishS
   const formatDate = (isoString?: string | null) => {
     if (!isoString) return null;
     const d = new Date(isoString);
-    return isNaN(d.getTime()) ? isoString : d.toLocaleDateString(undefined, {
-      month: 'short',
-      day: 'numeric',
-      year: 'numeric',
-    });
+    return isNaN(d.getTime())
+      ? isoString
+      : d.toLocaleDateString(undefined, {
+          month: 'short',
+          day: 'numeric',
+          year: 'numeric',
+        });
   };
 
   return (
-    <div className="bg-white rounded-2xl border border-[#E9DDE1] p-6 shadow-xs space-y-5 text-left">
+    <div className="bg-white rounded-2xl border border-[#E9DDE1] p-6 shadow-xs space-y-6 text-left">
       {/* Section Header */}
       <div className="flex items-center justify-between pb-4 border-b border-[#F8EFF2]">
         <div className="flex items-center gap-3">
@@ -144,7 +189,7 @@ export function SurveyPublishSection({ survey, onSurveyUpdated }: SurveyPublishS
           <div>
             <h2 className="text-base font-bold text-[#30232A]">Publishing & Lifecycle</h2>
             <p className="text-xs text-stone-500">
-              Control survey availability and response collection
+              Control survey availability, pricing tiers, and response collection
             </p>
           </div>
         </div>
@@ -172,32 +217,15 @@ export function SurveyPublishSection({ survey, onSurveyUpdated }: SurveyPublishS
         </div>
       </div>
 
-      {/* Draft State Card */}
+      {/* Draft State Card & Pricing Options */}
       {isDraft && (
-        <div className="space-y-4">
+        <div className="space-y-5">
           <div className="p-4 rounded-xl bg-amber-50/70 border border-amber-200/80 text-xs text-amber-900 space-y-2 leading-relaxed">
-            <div className="flex items-center gap-2 font-bold text-sm text-amber-950">
-              <AlertCircle className="w-4 h-4 text-amber-700" />
-              <span>Survey is in Draft Mode</span>
-            </div>
-            <p>
-              Respondents cannot access or submit answers to this survey until it is published.
-              Once published, the survey link will become active immediately.
-            </p>
-
-            <div className="pt-2 flex flex-wrap items-center gap-3">
-              {survey.is_paid ? (
-                <span className="inline-flex items-center gap-1 text-xs font-semibold text-emerald-800 bg-emerald-100/80 px-2.5 py-0.5 rounded-full">
-                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
-                  Publishing Fee Paid
-                </span>
-              ) : (
-                <span className="inline-flex items-center gap-1 text-xs font-semibold text-[#762D46] bg-[#F4E5EA] px-2.5 py-0.5 rounded-full">
-                  <CreditCard className="w-3.5 h-3.5 text-[#A84A63]" />
-                  Publishing Fee: ₹499 INR
-                </span>
-              )}
-
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2 font-bold text-sm text-amber-950">
+                <AlertCircle className="w-4 h-4 text-amber-700 shrink-0" />
+                <span>Survey is in Draft Mode</span>
+              </div>
               {hasQuestions ? (
                 <span className="inline-flex items-center gap-1 text-xs font-semibold text-emerald-800 bg-emerald-100/80 px-2.5 py-0.5 rounded-full">
                   <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
@@ -210,6 +238,10 @@ export function SurveyPublishSection({ survey, onSurveyUpdated }: SurveyPublishS
                 </span>
               )}
             </div>
+            <p>
+              Respondents cannot access or submit answers until this survey is published. Once
+              published, the public share link becomes active immediately.
+            </p>
           </div>
 
           {!hasQuestions && (
@@ -219,29 +251,226 @@ export function SurveyPublishSection({ survey, onSurveyUpdated }: SurveyPublishS
             </p>
           )}
 
-          <div className="flex flex-wrap items-center gap-3 pt-1">
-            <Button
-              onClick={handlePublishClick}
-              disabled={!hasQuestions || publishMutation.isPending || createOrderMutation.isPending}
-              isLoading={publishMutation.isPending || createOrderMutation.isPending}
-              className="px-5"
-            >
-              <Send className="w-4 h-4 mr-2" />
-              <span>{survey.is_paid ? 'Publish Survey' : 'Pay & Publish Survey'}</span>
-            </Button>
-
-            {!survey.is_paid && hasQuestions && (
-              <button
-                type="button"
-                onClick={initiatePaymentOrder}
-                disabled={createOrderMutation.isPending}
-                className="text-xs text-[#762D46] hover:underline font-semibold flex items-center gap-1 cursor-pointer"
+          {/* If already paid */}
+          {survey.is_paid ? (
+            <div className="p-4 rounded-xl bg-emerald-50 border border-emerald-200 text-xs text-emerald-900 flex items-center justify-between">
+              <div className="space-y-1">
+                <p className="font-bold flex items-center gap-1.5 text-emerald-950">
+                  <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                  Publishing Fee Paid
+                </p>
+                <p className="text-emerald-800">
+                  Your publishing activation is confirmed. Click below to make this survey live.
+                </p>
+              </div>
+              <Button
+                onClick={() => handlePublishFreeOrPaid()}
+                disabled={!hasQuestions || publishMutation.isPending}
+                isLoading={publishMutation.isPending}
+                className="px-5 shrink-0"
               >
-                <Sparkles className="w-3.5 h-3.5" />
-                <span>Pre-pay publishing fee</span>
-              </button>
-            )}
-          </div>
+                <Send className="w-4 h-4 mr-2" />
+                Publish Survey Now
+              </Button>
+            </div>
+          ) : (
+            /* Pricing Tier Selection Grid */
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <h3 className="text-sm font-bold text-[#30232A] flex items-center gap-1.5">
+                  <Sparkles className="w-4 h-4 text-[#762D46]" />
+                  <span>Select Publishing Tier</span>
+                </h3>
+                <span className="text-xs text-stone-500">Choose a plan to publish your survey</span>
+              </div>
+
+              {isLoadingPricing ? (
+                <div className="p-8 flex items-center justify-center">
+                  <Spinner size="md" />
+                  <span className="text-xs text-stone-500 ml-2">Loading available publishing plans...</span>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {/* Dynamic Pricing Plans from Backend */}
+                  {pricingOptions && pricingOptions.length > 0 ? (
+                    pricingOptions.map((plan: SurveyPricingOption) => {
+                      const isFreePlan = plan.is_free || Number(plan.price) === 0;
+                      const hasFreeCredit =
+                        isFreePlan &&
+                        (plan.user_remaining_count === undefined ||
+                          plan.user_remaining_count === null ||
+                          plan.user_remaining_count > 0);
+                      const isProcessingThis = processingPlanCode === plan.code;
+
+                      return (
+                        <div
+                          key={plan.id}
+                          className={`rounded-xl border p-4.5 flex flex-col justify-between space-y-4 transition-all ${
+                            isFreePlan
+                              ? 'bg-gradient-to-br from-emerald-50/60 to-white border-emerald-200 hover:border-emerald-300'
+                              : 'bg-gradient-to-br from-[#FAF3F5] to-white border-[#E9DDE1] hover:border-[#762D46]/40'
+                          }`}
+                        >
+                          <div className="space-y-2">
+                            <div className="flex items-start justify-between gap-2">
+                              <div>
+                                <span
+                                  className={`inline-flex items-center gap-1 text-[11px] font-bold px-2 py-0.5 rounded-full ${
+                                    isFreePlan
+                                      ? 'bg-emerald-100 text-emerald-800'
+                                      : 'bg-[#F4E5EA] text-[#762D46]'
+                                  }`}
+                                >
+                                  {isFreePlan ? (
+                                    <Gift className="w-3 h-3 text-emerald-600" />
+                                  ) : (
+                                    <CreditCard className="w-3 h-3 text-[#A84A63]" />
+                                  )}
+                                  {plan.name}
+                                </span>
+                                <h4 className="text-base font-bold text-[#30232A] mt-1.5">
+                                  {isFreePlan ? 'Free Tier' : `₹${plan.price} ${plan.currency || 'INR'}`}
+                                </h4>
+                              </div>
+
+                              {isFreePlan && (
+                                <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-emerald-100/90 text-emerald-800 border border-emerald-200">
+                                  {hasFreeCredit
+                                    ? `${plan.user_remaining_count ?? 1} Free Credit Available`
+                                    : 'Credits Used'}
+                                </span>
+                              )}
+                            </div>
+
+                            {plan.description && (
+                              <p className="text-xs text-stone-600 leading-relaxed">
+                                {plan.description}
+                              </p>
+                            )}
+
+                            {/* Plan Features */}
+                            {plan.features && plan.features.length > 0 && (
+                              <ul className="text-xs text-stone-600 space-y-1 pt-1">
+                                {plan.features.map((feat: string, idx: number) => (
+                                  <li key={idx} className="flex items-center gap-1.5">
+                                    <Check className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                                    <span>{feat}</span>
+                                  </li>
+                                ))}
+                              </ul>
+                            )}
+                          </div>
+
+                          {/* Action Button */}
+                          <div>
+                            {isFreePlan ? (
+                              <Button
+                                onClick={() => handlePublishFreeOrPaid(plan.code)}
+                                disabled={
+                                  !hasQuestions ||
+                                  !hasFreeCredit ||
+                                  publishMutation.isPending ||
+                                  createOrderMutation.isPending
+                                }
+                                isLoading={isProcessingThis && publishMutation.isPending}
+                                className="w-full text-xs font-semibold bg-emerald-700 hover:bg-emerald-800 text-white"
+                              >
+                                <Send className="w-3.5 h-3.5 mr-1.5" />
+                                {hasFreeCredit ? 'Publish for Free' : 'Free Credit Exhausted'}
+                              </Button>
+                            ) : (
+                              <Button
+                                onClick={() => initiatePaymentOrder(plan.code)}
+                                disabled={
+                                  !hasQuestions ||
+                                  publishMutation.isPending ||
+                                  createOrderMutation.isPending
+                                }
+                                isLoading={isProcessingThis && createOrderMutation.isPending}
+                                className="w-full text-xs font-semibold"
+                              >
+                                <CreditCard className="w-3.5 h-3.5 mr-1.5" />
+                                Pay ₹{plan.price} & Publish
+                              </Button>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })
+                  ) : (
+                    /* Fallback standard options if no backend plans configured */
+                    <>
+                      {/* Free Tier Fallback */}
+                      <div className="rounded-xl border border-emerald-200 bg-gradient-to-br from-emerald-50/60 to-white p-4.5 flex flex-col justify-between space-y-4">
+                        <div className="space-y-2">
+                          <span className="inline-flex items-center gap-1 text-[11px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800">
+                            <Gift className="w-3 h-3 text-emerald-600" />
+                            Free Plan
+                          </span>
+                          <h4 className="text-base font-bold text-[#30232A]">Free Tier</h4>
+                          <p className="text-xs text-stone-600">
+                            1 complimentary free survey publishing credit for organizers.
+                          </p>
+                          <ul className="text-xs text-stone-600 space-y-1 pt-1">
+                            <li className="flex items-center gap-1.5">
+                              <Check className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                              <span>Instant public publishing</span>
+                            </li>
+                            <li className="flex items-center gap-1.5">
+                              <Check className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                              <span>Aggregated analytics & response exports</span>
+                            </li>
+                          </ul>
+                        </div>
+                        <Button
+                          onClick={() => handlePublishFreeOrPaid(undefined)}
+                          disabled={!hasQuestions || publishMutation.isPending}
+                          isLoading={publishMutation.isPending && processingPlanCode === 'free'}
+                          className="w-full text-xs font-semibold bg-emerald-700 hover:bg-emerald-800 text-white"
+                        >
+                          <Send className="w-3.5 h-3.5 mr-1.5" />
+                          Publish for Free
+                        </Button>
+                      </div>
+
+                      {/* Standard Paid Tier Fallback */}
+                      <div className="rounded-xl border border-[#E9DDE1] bg-gradient-to-br from-[#FAF3F5] to-white p-4.5 flex flex-col justify-between space-y-4">
+                        <div className="space-y-2">
+                          <span className="inline-flex items-center gap-1 text-[11px] font-bold px-2 py-0.5 rounded-full bg-[#F4E5EA] text-[#762D46]">
+                            <CreditCard className="w-3 h-3 text-[#A84A63]" />
+                            Standard Plan
+                          </span>
+                          <h4 className="text-base font-bold text-[#30232A]">₹499 INR</h4>
+                          <p className="text-xs text-stone-600">
+                            Standard single survey publishing activation via Razorpay.
+                          </p>
+                          <ul className="text-xs text-stone-600 space-y-1 pt-1">
+                            <li className="flex items-center gap-1.5">
+                              <Check className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                              <span>Unlimited participant responses</span>
+                            </li>
+                            <li className="flex items-center gap-1.5">
+                              <Check className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                              <span>Instant UPI, Cards & Netbanking checkout</span>
+                            </li>
+                          </ul>
+                        </div>
+                        <Button
+                          onClick={() => initiatePaymentOrder(undefined)}
+                          disabled={!hasQuestions || createOrderMutation.isPending}
+                          isLoading={createOrderMutation.isPending && processingPlanCode === 'paid'}
+                          className="w-full text-xs font-semibold"
+                        >
+                          <CreditCard className="w-3.5 h-3.5 mr-1.5" />
+                          Pay ₹499 & Publish
+                        </Button>
+                      </div>
+                    </>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
         </div>
       )}
 
@@ -268,16 +497,27 @@ export function SurveyPublishSection({ survey, onSurveyUpdated }: SurveyPublishS
 
           <div className="flex items-center justify-between pt-1">
             <p className="text-xs text-stone-500">
-              When you are ready to conclude data collection, close the survey to stop new submissions.
+              When data collection is concluded, close the survey to stop new submissions.
             </p>
-            <Button
-              variant="outline"
-              onClick={() => setIsCloseModalOpen(true)}
-              className="text-rose-700 border-rose-300 hover:bg-rose-50 hover:text-rose-800 text-xs"
-            >
-              <Lock className="w-3.5 h-3.5 mr-1.5" />
-              <span>Close Survey</span>
-            </Button>
+            <div className="flex items-center gap-2">
+              {onNavigateToAnalytics && (
+                <Button
+                  variant="outline"
+                  onClick={onNavigateToAnalytics}
+                  className="text-xs text-stone-700 border-stone-300 hover:bg-stone-50"
+                >
+                  View Analytics
+                </Button>
+              )}
+              <Button
+                variant="outline"
+                onClick={() => setIsCloseModalOpen(true)}
+                className="text-rose-700 border-rose-300 hover:bg-rose-50 hover:text-rose-800 text-xs"
+              >
+                <Lock className="w-3.5 h-3.5 mr-1.5" />
+                <span>Close Survey</span>
+              </Button>
+            </div>
           </div>
         </div>
       )}
@@ -297,12 +537,12 @@ export function SurveyPublishSection({ survey, onSurveyUpdated }: SurveyPublishS
             </div>
             <p>
               This survey is no longer accepting new participant responses. Existing answers remain
-              intact and can be viewed in survey analytics.
+              intact and can be viewed in the survey analytics dashboard.
             </p>
           </div>
 
           <p className="text-xs text-stone-500 italic">
-            Note: Reopening a closed survey is not supported to preserve response window compliance.
+            Note: Closed surveys cannot be reopened to maintain audit integrity and response compliance.
           </p>
         </div>
       )}

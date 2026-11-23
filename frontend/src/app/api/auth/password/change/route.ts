@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { changePasswordSchema } from '@/features/authentication/schemas/password.schema';
 import { djangoFetch } from '@/lib/api/django-client';
+import { DJANGO_ENDPOINTS } from '@/config/endpoints';
 
 export async function POST(request: NextRequest) {
   try {
@@ -14,7 +15,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const res = await djangoFetch('/api/auth/password/change/', {
+    const res = await djangoFetch(DJANGO_ENDPOINTS.AUTH.PASSWORD_CHANGE, {
       method: 'POST',
       body: JSON.stringify(validation.data),
       requiresAuth: true,

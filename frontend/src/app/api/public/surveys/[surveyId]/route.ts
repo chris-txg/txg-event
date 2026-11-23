@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { djangoFetch } from '@/lib/api/django-client';
+import { DJANGO_ENDPOINTS } from '@/config/endpoints';
 
 /**
  * GET /api/public/surveys/[surveyId]
@@ -23,7 +24,7 @@ export async function GET(
       return NextResponse.json({ detail: 'Survey ID is required.' }, { status: 400 });
     }
 
-    const res = await djangoFetch(`/api/public/surveys/${encodeURIComponent(surveyId.trim())}/`, {
+    const res = await djangoFetch(DJANGO_ENDPOINTS.PUBLIC_SURVEYS.DETAIL(surveyId), {
       method: 'GET',
       requiresAuth: true,
     });

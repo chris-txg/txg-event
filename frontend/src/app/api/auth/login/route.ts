@@ -1,8 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { setAuthCookies } from '@/lib/auth/cookies';
 import { loginSchema } from '@/features/authentication/schemas/login.schema';
-
-const DJANGO_API_URL = process.env.DJANGO_API_URL || 'http://localhost:8000';
+import { DJANGO_BASE_URL, DJANGO_ENDPOINTS } from '@/config/endpoints';
 
 export async function POST(request: NextRequest) {
   try {
@@ -21,7 +20,7 @@ export async function POST(request: NextRequest) {
 
     const { identifier, password } = validation.data;
 
-    const res = await fetch(`${DJANGO_API_URL}/api/auth/login/`, {
+    const res = await fetch(`${DJANGO_BASE_URL}${DJANGO_ENDPOINTS.AUTH.LOGIN}`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',

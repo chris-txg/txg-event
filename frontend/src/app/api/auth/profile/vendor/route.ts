@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { djangoFetch } from '@/lib/api/django-client';
+import { DJANGO_ENDPOINTS } from '@/config/endpoints';
 
 export async function GET() {
-  const res = await djangoFetch('/api/auth/profile/vendor/', {
+  const res = await djangoFetch(DJANGO_ENDPOINTS.AUTH.PROFILE_VENDOR, {
     method: 'GET',
     requiresAuth: true,
   });
@@ -20,7 +21,7 @@ export async function PATCH(request: NextRequest) {
   try {
     const body = await request.json();
 
-    const res = await djangoFetch('/api/auth/profile/vendor/', {
+    const res = await djangoFetch(DJANGO_ENDPOINTS.AUTH.PROFILE_VENDOR, {
       method: 'PATCH',
       body: JSON.stringify(body),
       requiresAuth: true,

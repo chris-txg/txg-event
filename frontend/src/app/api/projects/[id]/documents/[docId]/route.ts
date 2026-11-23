@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { djangoFetch } from '@/lib/api/django-client';
+import { DJANGO_ENDPOINTS } from '@/config/endpoints';
 
 export async function DELETE(
   _request: NextRequest,
@@ -14,7 +15,7 @@ export async function DELETE(
       );
     }
 
-    const res = await djangoFetch(`/api/projects/${id}/documents/${docId}/`, {
+    const res = await djangoFetch(DJANGO_ENDPOINTS.PROJECTS.DOCUMENT(id, docId), {
       method: 'DELETE',
       requiresAuth: true,
     });

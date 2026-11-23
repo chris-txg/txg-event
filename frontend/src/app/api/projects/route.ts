@@ -1,11 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { djangoFetch } from '@/lib/api/django-client';
+import { DJANGO_ENDPOINTS } from '@/config/endpoints';
 
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
     const queryString = searchParams.toString();
-    const endpoint = `/api/projects/${queryString ? `?${queryString}` : ''}`;
+    const endpoint = queryString
+      ? `${DJANGO_ENDPOINTS.PROJECTS.LIST_CREATE}?${queryString}`
+      : DJANGO_ENDPOINTS.PROJECTS.LIST_CREATE;
 
     const res = await djangoFetch(endpoint, {
       method: 'GET',
@@ -29,7 +32,7 @@ export async function POST(request: NextRequest) {
     if (contentType.includes('multipart/form-data')) {
       const formData = await request.formData();
 
-      const res = await djangoFetch('/api/projects/', {
+      const res = await djangoFetch(DJANGO_ENDPOINTS.PROJECTS.LIST_CREATE, {
         method: 'POST',
         requiresAuth: true,
         body: formData,
@@ -40,7 +43,7 @@ export async function POST(request: NextRequest) {
     } else {
       const jsonBody = await request.json();
 
-      const res = await djangoFetch('/api/projects/', {
+      const res = await djangoFetch(DJANGO_ENDPOINTS.PROJECTS.LIST_CREATE, {
         method: 'POST',
         requiresAuth: true,
         body: JSON.stringify(jsonBody),

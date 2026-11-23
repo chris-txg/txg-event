@@ -8,6 +8,7 @@ import { Input } from '@/components/ui/Input';
 import { Alert } from '@/components/ui/Alert';
 import { Building2, FileText, MapPin, Sparkles, CheckCircle2 } from 'lucide-react';
 import { bffFetch } from '@/lib/api/bff-client';
+import { BFF_ENDPOINTS } from '@/config/endpoints';
 
 interface CustomerProfileCardProps {
   profile: CustomerProfile;
@@ -43,7 +44,7 @@ export function CustomerProfileCard({ profile, onProfileUpdated }: CustomerProfi
 
     setLoading(true);
     try {
-      const res = await bffFetch('/api/auth/profile/customer', {
+      const res = await bffFetch(BFF_ENDPOINTS.AUTH.PROFILE_CUSTOMER, {
         method: 'PATCH',
         body: JSON.stringify({
           customer_type: 'B2B',

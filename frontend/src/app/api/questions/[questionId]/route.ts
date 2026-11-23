@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { djangoFetch } from '@/lib/api/django-client';
+import { DJANGO_ENDPOINTS } from '@/config/endpoints';
 
 /**
  * PATCH /api/questions/[questionId]
@@ -18,7 +19,7 @@ export async function PATCH(
 
     const jsonBody = await request.json();
 
-    const res = await djangoFetch(`/api/questions/${questionId}/`, {
+    const res = await djangoFetch(DJANGO_ENDPOINTS.QUESTIONS.DETAIL(questionId), {
       method: 'PATCH',
       requiresAuth: true,
       body: JSON.stringify(jsonBody),
@@ -49,7 +50,7 @@ export async function DELETE(
       return NextResponse.json({ detail: 'Question ID is required.' }, { status: 400 });
     }
 
-    const res = await djangoFetch(`/api/questions/${questionId}/`, {
+    const res = await djangoFetch(DJANGO_ENDPOINTS.QUESTIONS.DETAIL(questionId), {
       method: 'DELETE',
       requiresAuth: true,
     });
