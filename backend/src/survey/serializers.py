@@ -293,13 +293,12 @@ class SurveySubmitSerializer(serializers.Serializer):
         # 3. Duplicate Submission Rule Check
         client_ip = self.context.get("client_ip")
         if survey.duplicate_rule == Survey.DuplicateRule.ONE_PER_USER:
-            if is_authenticated:
-                if SurveyResponse.objects.filter(survey=survey, user=request.user).exists():
-                    raise serializers.ValidationError("You have already submitted a response to this survey.")
-            elif survey.duplicate_rule == Survey.DuplicateRule.ONE_PER_USER and not is_authenticated:
-                # If survey strictly allows one per user and anonymous is allowed, track by IP
-                if client_ip and SurveyResponse.objects.filter(survey=survey, respondent_ip=client_ip).exists():
-                    raise serializers.ValidationError("A response from this IP address has already been submitted.")
+            if not is_authenticated:
+                raise serializers.ValidationError(
+                    "You must be logged in to participate in this survey because it is restricted to one response per user."
+                )
+            if SurveyResponse.objects.filter(survey=survey, user=request.user).exists():
+                raise serializers.ValidationError("You have already submitted a response to this survey.")
 
         elif survey.duplicate_rule == Survey.DuplicateRule.ONE_PER_IP:
             if client_ip and SurveyResponse.objects.filter(survey=survey, respondent_ip=client_ip).exists():

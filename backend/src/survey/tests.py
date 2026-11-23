@@ -109,8 +109,8 @@ class SurveyTests(APITestCase):
         # Add a question
         Question.objects.create(survey=survey, text="Are you coming?", question_type=Question.QuestionType.BOOLEAN)
 
-        # Cannot publish without payment -> 402 Payment Required
-        pub_unpaid = self.client.post(publish_url)
+        # Cannot publish paid standard plan without payment -> 402 Payment Required
+        pub_unpaid = self.client.post(publish_url, {"pricing_option_code": "standard"}, format="json")
         self.assertEqual(pub_unpaid.status_code, status.HTTP_402_PAYMENT_REQUIRED)
         self.assertEqual(pub_unpaid.data["code"], "PAYMENT_REQUIRED")
 
@@ -308,7 +308,14 @@ class SurveyTests(APITestCase):
         self.assertEqual(res_dup.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertIn("already submitted", str(res_dup.data))
 
-        # Test My Submissions endpoint
+        # Test anonymous submission blocked when ONE_PER_USER
+        self.client.logout()
+        res_anon = self.client.post(submit_url, payload, format="json")
+        self.assertEqual(res_anon.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("must be logged in", str(res_anon.data))
+
+        # Re-authenticate as user2 to test My Submissions endpoint
+        self.client.force_authenticate(user=self.user2)
         my_res = self.client.get(self.my_submissions_url)
         self.assertEqual(my_res.status_code, status.HTTP_200_OK)
         self.assertEqual(len(my_res.data["results"]), 1)
