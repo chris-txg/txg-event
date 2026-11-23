@@ -29,6 +29,7 @@ export function DashboardSidebar() {
   const isServicesActive = pathname.startsWith('/services');
   const isResearchSurveysActive = pathname === '/services/research-surveys';
   const isProjectsActive = pathname.startsWith('/projects');
+  const isSurveysActive = pathname.startsWith('/surveys');
 
   const openPlaceholderModal = (featureName: string) => {
     setModalFeature(featureName);
@@ -103,6 +104,19 @@ export function DashboardSidebar() {
             >
               <FolderKanban className="w-4 h-4 text-[#A84A63]" />
               <span>Projects</span>
+            </Link>
+
+            {/* Surveys Active Item */}
+            <Link
+              href="/surveys"
+              className={`flex items-center gap-2.5 px-3 py-2 text-sm font-medium rounded-lg transition-colors ${
+                isSurveysActive
+                  ? 'bg-[#5C2337] text-white shadow-sm'
+                  : 'text-stone-300 hover:bg-[#5C2337]/50 hover:text-white'
+              }`}
+            >
+              <ClipboardList className="w-4 h-4 text-[#A84A63]" />
+              <span>Surveys</span>
             </Link>
           </div>
 

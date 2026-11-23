@@ -21,6 +21,7 @@ import {
   Edit3,
 } from 'lucide-react';
 import { Spinner } from '@/components/ui/Spinner';
+import { ProjectSurveysTab } from '@/features/surveys/components/ProjectSurveysTab';
 
 function ProjectWorkspaceContent() {
   const params = useParams();
@@ -418,8 +419,13 @@ function ProjectWorkspaceContent() {
         </div>
       )}
 
-      {/* Placeholder Tabs (3 to 7) */}
-      {['audience-segments', 'research-activities', 'surveys', 'analytics', 'feasibility-report'].includes(
+      {/* Dedicated Surveys Tab */}
+      {activeTab === 'surveys' && (
+        <ProjectSurveysTab projectId={id} projectName={project?.project_name} />
+      )}
+
+      {/* Placeholder Tabs */}
+      {['audience-segments', 'research-activities', 'analytics', 'feasibility-report'].includes(
         activeTab
       ) && (
         <div className="bg-white rounded-2xl border border-[#E9DDE1] p-12 text-center max-w-md mx-auto shadow-xs my-8">
