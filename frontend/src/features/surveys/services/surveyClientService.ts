@@ -23,14 +23,19 @@ import {
   SurveyPricingOption,
   SurveyPublishPayload,
   SurveyPaymentOrderPayload,
+  CouponValidatePayload,
+  CouponValidateResponse,
   SurveyAnalyticsData,
   SurveyResponseDetail,
 } from '@/features/surveys/types/survey.types';
 
 export interface SurveyListFilters {
-  status?: SurveyStatus;
+  status?: SurveyStatus | string;
   project?: string;
   visibility?: SurveyVisibility;
+  from_date?: string;
+  to_date?: string;
+  search?: string;
   page?: number;
   page_size?: number;
 }
@@ -50,6 +55,9 @@ export const surveyClientService = {
     if (filters?.status) params.set('status', filters.status);
     if (filters?.project) params.set('project', filters.project);
     if (filters?.visibility) params.set('visibility', filters.visibility);
+    if (filters?.from_date) params.set('from_date', filters.from_date);
+    if (filters?.to_date) params.set('to_date', filters.to_date);
+    if (filters?.search) params.set('search', filters.search);
 
     const queryString = params.toString();
     const endpoint = `${BFF_ENDPOINTS.SURVEYS.LIST}${queryString ? `?${queryString}` : ''}`;
@@ -266,6 +274,21 @@ export const surveyClientService = {
   ): Promise<BffResponse<SurveyPaymentVerifyResponse>> {
     const cleanId = surveyId ? surveyId.trim() : '';
     return bffFetch<SurveyPaymentVerifyResponse>(BFF_ENDPOINTS.SURVEYS.PAYMENT_VERIFY(cleanId), {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+  },
+
+  /**
+   * Validates a coupon code against a survey and pricing plan.
+   * Invokes Next.js BFF endpoint: POST /api/surveys/[surveyId]/coupons/validate
+   */
+  async validateCoupon(
+    surveyId: string,
+    payload: CouponValidatePayload
+  ): Promise<BffResponse<CouponValidateResponse>> {
+    const cleanId = surveyId ? surveyId.trim() : '';
+    return bffFetch<CouponValidateResponse>(BFF_ENDPOINTS.SURVEYS.COUPON_VALIDATE(cleanId), {
       method: 'POST',
       body: JSON.stringify(payload),
     });

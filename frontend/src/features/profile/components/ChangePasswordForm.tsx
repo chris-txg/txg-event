@@ -12,7 +12,8 @@ import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
 import { Alert } from '@/components/ui/Alert';
 import { Card, CardHeader, CardTitle, CardDescription } from '@/components/ui/Card';
-import { Lock, CheckCircle2 } from 'lucide-react';
+import { Lock } from 'lucide-react';
+import { scrollToFirstFormError } from '@/lib/utils/formValidation';
 
 export function ChangePasswordForm() {
   const [success, setSuccess] = useState<string | null>(null);
@@ -84,9 +85,14 @@ export function ChangePasswordForm() {
         </div>
       )}
 
-      <form onSubmit={handleSubmit(onSubmit)} className="space-y-4" noValidate>
+      <form
+        onSubmit={handleSubmit(onSubmit, (errs) => scrollToFirstFormError(errs))}
+        className="space-y-4"
+        noValidate
+      >
         <Input
           label="Current Password"
+          required
           type="password"
           placeholder="••••••••"
           showPasswordToggle
@@ -98,15 +104,18 @@ export function ChangePasswordForm() {
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <Input
             label="New Password"
+            required
             type="password"
             placeholder="••••••••"
             showPasswordToggle
             startIcon={<Lock className="h-4 w-4" />}
             error={errors.new_password?.message}
+            helperText="Minimum 8 characters"
             {...register('new_password')}
           />
           <Input
             label="Confirm New Password"
+            required
             type="password"
             placeholder="••••••••"
             showPasswordToggle
@@ -116,9 +125,13 @@ export function ChangePasswordForm() {
           />
         </div>
 
-        <div className="flex justify-end pt-2">
-          <Button type="submit" variant="primary" size="md" isLoading={isSubmitting}>
-            <CheckCircle2 className="h-4 w-4 mr-1.5" />
+        <div className="pt-2">
+          <Button
+            type="submit"
+            variant="primary"
+            size="md"
+            isLoading={isSubmitting}
+          >
             <span>Update Password</span>
           </Button>
         </div>

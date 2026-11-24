@@ -88,19 +88,6 @@ function EditSurveyContent() {
 
   return (
     <div className="space-y-6 animate-fadeIn text-left">
-      {/* Context Breadcrumbs */}
-      <div className="flex items-center gap-2 text-xs text-stone-500">
-        <Link href="/surveys" className="hover:text-[#762D46] transition-colors">
-          Surveys
-        </Link>
-        <span>/</span>
-        <Link href={`/surveys/${survey.id}`} className="hover:text-[#762D46] transition-colors truncate max-w-xs">
-          {survey.title}
-        </Link>
-        <span>/</span>
-        <span className="text-stone-800 font-semibold">Edit Metadata</span>
-      </div>
-
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-[#E9DDE1]">
         <div>

@@ -202,9 +202,9 @@ export function RazorpayPaymentModal({
       role="dialog"
       aria-modal="true"
       aria-labelledby="payment-modal-title"
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 animate-fadeIn"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-3 sm:p-4 overflow-y-auto animate-fadeIn"
     >
-      <div className="bg-white rounded-2xl max-w-lg w-full p-6 sm:p-8 shadow-2xl border border-stone-200 relative text-left space-y-6">
+      <div className="bg-white rounded-2xl max-w-lg w-full p-5 sm:p-8 shadow-2xl border border-stone-200 relative text-left space-y-6 my-auto max-h-[95vh] overflow-y-auto">
         <button
           onClick={handleModalClose}
           disabled={verifyMutation.isPending || isOpeningCheckout}

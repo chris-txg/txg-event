@@ -13,6 +13,7 @@ import { Button } from '@/components/ui/Button';
 import { Alert } from '@/components/ui/Alert';
 import { Card, CardHeader, CardTitle, CardDescription } from '@/components/ui/Card';
 import { Mail, Lock, ArrowRight } from 'lucide-react';
+import { scrollToFirstFormError } from '@/lib/utils/formValidation';
 
 export function LoginForm() {
   const router = useRouter();
@@ -72,7 +73,11 @@ export function LoginForm() {
         </CardDescription>
       </CardHeader>
 
-      <form onSubmit={handleSubmit(onSubmit)} className="space-y-5" noValidate>
+      <form
+        onSubmit={handleSubmit(onSubmit, (errs) => scrollToFirstFormError(errs))}
+        className="space-y-5"
+        noValidate
+      >
         {serverError && (
           <Alert variant="error" title="Sign In Failed">
             {serverError}
@@ -81,6 +86,7 @@ export function LoginForm() {
 
         <Input
           label="Email or Username"
+          required
           type="text"
           placeholder="you@example.com or username"
           autoComplete="username"
@@ -92,6 +98,7 @@ export function LoginForm() {
         <div className="space-y-1.5">
           <Input
             label="Password"
+            required
             type="password"
             placeholder="••••••••"
             autoComplete="current-password"
@@ -122,7 +129,7 @@ export function LoginForm() {
         </Button>
 
         <div className="pt-4 text-center text-xs text-stone-500 border-t border-stone-100">
-          Don&apos;t have an account yet?{' '}
+          Don&apos;t have an account?{' '}
           <Link
             href="/register"
             className="font-bold text-[#762D46] hover:text-[#A84A63] underline underline-offset-4 transition-colors"

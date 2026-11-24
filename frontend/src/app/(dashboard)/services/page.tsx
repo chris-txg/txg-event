@@ -21,7 +21,7 @@ export default function ServicesPage() {
       description:
         'Run targeted audience intelligence, survey campaigns, market viability checks, and attendee sentiment studies.',
       icon: ClipboardList,
-      href: '/services/research-surveys',
+      href: '/surveys',
       status: 'active',
       badge: 'Available Now',
     },

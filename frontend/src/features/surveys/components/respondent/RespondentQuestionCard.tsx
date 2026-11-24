@@ -34,7 +34,7 @@ export function RespondentQuestionCard({
       className={cn(
         'p-5 sm:p-6 rounded-2xl border bg-white shadow-2xs transition-all space-y-4 text-left focus:outline-none focus:ring-2 focus:ring-[#762D46]/20',
         error
-          ? 'border-rose-300 ring-2 ring-rose-500/10'
+          ? 'border-rose-500 ring-2 ring-rose-500/20 bg-rose-50/10'
           : 'border-[#E9DDE1] hover:border-[#762D46]/30'
       )}
     >

@@ -5,18 +5,16 @@ import Link from 'next/link';
 import {
   Plus,
   Eye,
-  Edit3,
   Trash2,
   Calendar,
   Globe,
   Lock,
   FileSpreadsheet,
-  ChevronLeft,
-  ChevronRight,
 } from 'lucide-react';
 import { useProjectSurveys } from '@/features/surveys/hooks/useSurveys';
 import { SurveyListItem, SurveyStatus, SurveyVisibility } from '@/features/surveys/types/survey.types';
 import { DeleteSurveyModal } from '@/features/surveys/components/DeleteSurveyModal';
+import { Pagination } from '@/components/ui/Pagination';
 import { Spinner } from '@/components/ui/Spinner';
 import { Alert } from '@/components/ui/Alert';
 
@@ -27,7 +25,7 @@ export interface ProjectSurveysTabProps {
 
 export function ProjectSurveysTab({ projectId, projectName }: ProjectSurveysTabProps) {
   const [page, setPage] = useState(1);
-  const pageSize = 10;
+  const [pageSize, setPageSize] = useState(10);
   const [surveyToDelete, setSurveyToDelete] = useState<SurveyListItem | null>(null);
 
   const {
@@ -36,7 +34,9 @@ export function ProjectSurveysTab({ projectId, projectName }: ProjectSurveysTabP
     isError,
     error,
     refetch,
-  } = useProjectSurveys(projectId, page, pageSize);
+  } = useProjectSurveys(projectId, page, pageSize, {
+    staleTime: 30 * 1000,
+  });
 
   const surveys = paginatedData?.results || [];
   const totalCount = paginatedData?.count || 0;
@@ -223,13 +223,6 @@ export function ProjectSurveysTab({ projectId, projectName }: ProjectSurveysTabP
                         >
                           <Eye className="w-4 h-4" />
                         </Link>
-                        <Link
-                          href={`/surveys/${survey.id}/edit`}
-                          className="p-1.5 text-stone-500 hover:text-[#762D46] hover:bg-[#F4E5EA]/60 rounded-lg transition-colors"
-                          title="Edit Survey"
-                        >
-                          <Edit3 className="w-4 h-4" />
-                        </Link>
                         <button
                           onClick={() => setSurveyToDelete(survey)}
                           className="p-1.5 text-stone-500 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors cursor-pointer"
@@ -245,33 +238,20 @@ export function ProjectSurveysTab({ projectId, projectName }: ProjectSurveysTabP
             </table>
           </div>
 
-          {/* Pagination */}
-          {totalPages > 1 && (
-            <div className="flex items-center justify-between px-4 py-3 bg-[#FDFBFB] border-t border-[#F8EFF2] text-xs text-stone-600">
-              <div>
-                Showing page <strong className="font-semibold text-stone-900">{page}</strong> of{' '}
-                <strong className="font-semibold text-stone-900">{totalPages}</strong> ({totalCount} total)
-              </div>
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={() => setPage((p) => Math.max(1, p - 1))}
-                  disabled={page <= 1}
-                  className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md border border-stone-200 bg-white hover:bg-stone-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-                >
-                  <ChevronLeft className="w-3.5 h-3.5" />
-                  <span>Previous</span>
-                </button>
-                <button
-                  onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-                  disabled={page >= totalPages}
-                  className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md border border-stone-200 bg-white hover:bg-stone-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-                >
-                  <span>Next</span>
-                  <ChevronRight className="w-3.5 h-3.5" />
-                </button>
-              </div>
-            </div>
-          )}
+          {/* Centralized Pagination */}
+          <Pagination
+            currentPage={page}
+            totalPages={totalPages}
+            totalCount={totalCount}
+            pageSize={pageSize}
+            pageSizeOptions={[5, 10, 20, 50]}
+            onPageChange={(newPage) => setPage(newPage)}
+            onPageSizeChange={(newSize) => {
+              setPageSize(newSize);
+              setPage(1);
+            }}
+            isLoading={isLoading}
+          />
         </div>
       )}
 

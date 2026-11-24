@@ -17,6 +17,7 @@ from survey.views import (
     SurveyListCreateView,
     SurveyPricingOptionsListView,
     SurveyPublishView,
+    SurveyReportDownloadView,
     SurveyResponsesListView,
     SurveyVerifyPaymentView,
 )
@@ -62,5 +63,6 @@ urlpatterns = [
     # -------------------------------------------------------------
     path("api/surveys/<uuid:id>/responses/", SurveyResponsesListView.as_view(), name="survey_responses_list"),
     path("api/surveys/<uuid:id>/analytics/", SurveyAnalyticsView.as_view(), name="survey_analytics"),
+    path("api/surveys/<uuid:id>/report/download/", SurveyReportDownloadView.as_view(), name="survey_report_download"),
 ]
 

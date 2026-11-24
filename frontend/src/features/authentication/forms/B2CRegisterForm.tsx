@@ -15,6 +15,7 @@ import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
 import { Alert } from '@/components/ui/Alert';
 import { User, Mail, Lock, Phone, MapPin, ArrowRight } from 'lucide-react';
+import { scrollToFirstFormError } from '@/lib/utils/formValidation';
 
 export function B2CRegisterForm() {
   const router = useRouter();
@@ -62,7 +63,11 @@ export function B2CRegisterForm() {
   };
 
   return (
-    <form onSubmit={handleSubmit(onSubmit)} className="space-y-4" noValidate>
+    <form
+      onSubmit={handleSubmit(onSubmit, (errs) => scrollToFirstFormError(errs))}
+      className="space-y-4"
+      noValidate
+    >
       {generalError && (
         <Alert variant="error" title="Registration Failed">
           {generalError}
@@ -72,6 +77,7 @@ export function B2CRegisterForm() {
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <Input
           label="First Name"
+          required
           placeholder="Jane"
           startIcon={<User className="h-4 w-4" />}
           error={errors.first_name?.message}
@@ -79,6 +85,7 @@ export function B2CRegisterForm() {
         />
         <Input
           label="Last Name"
+          required
           placeholder="Doe"
           startIcon={<User className="h-4 w-4" />}
           error={errors.last_name?.message}
@@ -89,6 +96,7 @@ export function B2CRegisterForm() {
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <Input
           label="Username"
+          required
           placeholder="janedoe"
           autoComplete="username"
           error={errors.username?.message}
@@ -96,6 +104,7 @@ export function B2CRegisterForm() {
         />
         <Input
           label="Email Address"
+          required
           type="email"
           placeholder="jane@example.com"
           autoComplete="email"
@@ -107,16 +116,17 @@ export function B2CRegisterForm() {
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <Input
-          label="Phone (Optional)"
+          label="Phone Number"
           type="tel"
           placeholder="+91 98765 43210"
           startIcon={<Phone className="h-4 w-4" />}
           error={errors.phone?.message}
+          helperText="Include country code if outside India"
           {...register('phone')}
         />
         <Input
-          label="City (Optional)"
-          placeholder="Mumbai, Bangalore..."
+          label="City"
+          placeholder="Mumbai"
           startIcon={<MapPin className="h-4 w-4" />}
           error={errors.city?.message}
           {...register('city')}
@@ -126,17 +136,22 @@ export function B2CRegisterForm() {
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <Input
           label="Password"
+          required
           type="password"
           placeholder="••••••••"
+          autoComplete="new-password"
           showPasswordToggle
           startIcon={<Lock className="h-4 w-4" />}
           error={errors.password?.message}
+          helperText="At least 8 characters"
           {...register('password')}
         />
         <Input
           label="Confirm Password"
+          required
           type="password"
           placeholder="••••••••"
+          autoComplete="new-password"
           showPasswordToggle
           startIcon={<Lock className="h-4 w-4" />}
           error={errors.password_confirm?.message}
@@ -151,7 +166,7 @@ export function B2CRegisterForm() {
         className="w-full mt-2"
         isLoading={isSubmitting}
       >
-        <span>Create Individual Account</span>
+        <span>Create Personal Account</span>
         <ArrowRight className="h-4 w-4 ml-1" />
       </Button>
     </form>

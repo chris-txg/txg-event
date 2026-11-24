@@ -12,12 +12,15 @@ export function proxy(request: NextRequest) {
   const isProtectedPath =
     pathname.startsWith('/profile') ||
     pathname.startsWith('/services') ||
-    pathname.startsWith('/projects');
+    pathname.startsWith('/projects') ||
+    pathname.startsWith('/surveys') ||
+    pathname.startsWith('/analytics');
   const isAuthPath =
     pathname.startsWith('/login') ||
     pathname.startsWith('/register') ||
     pathname.startsWith('/forgot-password') ||
     pathname.startsWith('/reset-password');
+  const isLandingPath = pathname === '/';
 
   if (isProtectedPath && !hasSession) {
     const loginUrl = request.nextUrl.clone();
@@ -26,7 +29,7 @@ export function proxy(request: NextRequest) {
     return NextResponse.redirect(loginUrl);
   }
 
-  if (isAuthPath && hasSession) {
+  if ((isLandingPath || isAuthPath) && hasSession) {
     const servicesUrl = request.nextUrl.clone();
     servicesUrl.pathname = APP_ROUTES.SERVICES;
     return NextResponse.redirect(servicesUrl);
@@ -41,9 +44,12 @@ export { proxy as middleware };
 
 export const config = {
   matcher: [
+    '/',
     '/profile/:path*',
     '/services/:path*',
     '/projects/:path*',
+    '/surveys/:path*',
+    '/analytics/:path*',
     '/login',
     '/register/:path*',
     '/forgot-password',

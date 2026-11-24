@@ -32,6 +32,8 @@ import type {
   SurveyPricingOption,
   SurveyPublishPayload,
   SurveyPaymentOrderPayload,
+  CouponValidatePayload,
+  CouponValidateResponse,
   SurveyAnalyticsData,
   SurveyResponseDetail,
 } from '@/features/surveys/types/survey.types';
@@ -780,6 +782,40 @@ export function useSubmitPublicSurvey(
 // =================================================================
 // 8. Survey Lifecycle & Payment Mutation Hooks
 // =================================================================
+
+export interface ValidateCouponVariables {
+  surveyId: string;
+  payload: CouponValidatePayload;
+}
+
+/**
+ * Validates a coupon code against a survey and pricing plan.
+ * Returns discount details and final payable amount.
+ */
+export function useValidateCoupon(
+  options?: UseMutationOptions<CouponValidateResponse, SurveyApiError, ValidateCouponVariables>
+) {
+  const { ...restOptions } = options ?? {};
+
+  return useMutation({
+    ...restOptions,
+    mutationFn: async ({ surveyId, payload }: ValidateCouponVariables) => {
+      const cleanId = surveyId ? surveyId.trim() : '';
+      if (!cleanId) {
+        throw new SurveyApiError('Survey ID is required to validate coupon.', 400, {
+          detail: 'Survey ID is required to validate coupon.',
+        });
+      }
+
+      const res = await surveyClientService.validateCoupon(cleanId, payload);
+      if (!res.ok || !res.data) {
+        throw parseSurveyApiError(res.error, res.status, 'Invalid coupon code.');
+      }
+      return res.data;
+    },
+    retry: false,
+  });
+}
 
 export interface PublishSurveyVariables {
   surveyId: string;

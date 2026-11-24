@@ -4,7 +4,6 @@ import React, { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useRouter } from 'next/navigation';
-import Link from 'next/link';
 import {
   vendorRegisterSchema,
   VendorRegisterFormData,
@@ -18,7 +17,8 @@ import { Select } from '@/components/ui/Select';
 import { Button } from '@/components/ui/Button';
 import { Alert } from '@/components/ui/Alert';
 import { Card, CardHeader, CardTitle, CardDescription } from '@/components/ui/Card';
-import { User, Mail, Lock, Phone, MapPin, Store, ArrowRight } from 'lucide-react';
+import { Store, User, Mail, Lock, Phone, MapPin, ArrowRight } from 'lucide-react';
+import { scrollToFirstFormError } from '@/lib/utils/formValidation';
 
 export function VendorRegisterForm() {
   const router = useRouter();
@@ -35,12 +35,12 @@ export function VendorRegisterForm() {
     defaultValues: {
       business_name: '',
       business_category: 'VENUE',
-      city: '',
       first_name: '',
       last_name: '',
       username: '',
       email: '',
       phone: '',
+      city: '',
       password: '',
       password_confirm: '',
     },
@@ -69,13 +69,17 @@ export function VendorRegisterForm() {
   return (
     <Card className="w-full">
       <CardHeader>
-        <CardTitle>Join as a Service Vendor</CardTitle>
+        <CardTitle>Join as an Event Vendor</CardTitle>
         <CardDescription>
-          Showcase your event venue, catering, AV, photography, or services to verified organizers
+          Offer venues, catering, decoration, audio/visual or other event services to organisers.
         </CardDescription>
       </CardHeader>
 
-      <form onSubmit={handleSubmit(onSubmit)} className="space-y-4" noValidate>
+      <form
+        onSubmit={handleSubmit(onSubmit, (errs) => scrollToFirstFormError(errs))}
+        className="space-y-4"
+        noValidate
+      >
         {generalError && (
           <Alert variant="error" title="Registration Failed">
             {generalError}
@@ -86,6 +90,7 @@ export function VendorRegisterForm() {
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <Input
             label="Business / Brand Name"
+            required
             placeholder="Grand Horizon Banquets"
             startIcon={<Store className="h-4 w-4" />}
             error={errors.business_name?.message}
@@ -93,6 +98,7 @@ export function VendorRegisterForm() {
           />
           <Select
             label="Service Category"
+            required
             options={VENDOR_CATEGORIES}
             error={errors.business_category?.message}
             {...register('business_category')}
@@ -102,6 +108,7 @@ export function VendorRegisterForm() {
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <Input
             label="Operating City"
+            required
             placeholder="Mumbai, Delhi NCR, Bangalore..."
             startIcon={<MapPin className="h-4 w-4" />}
             error={errors.city?.message}
@@ -121,6 +128,7 @@ export function VendorRegisterForm() {
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <Input
             label="Contact Person First Name"
+            required
             placeholder="Raj"
             startIcon={<User className="h-4 w-4" />}
             error={errors.first_name?.message}
@@ -128,6 +136,7 @@ export function VendorRegisterForm() {
           />
           <Input
             label="Contact Person Last Name"
+            required
             placeholder="Kapoor"
             startIcon={<User className="h-4 w-4" />}
             error={errors.last_name?.message}
@@ -138,6 +147,7 @@ export function VendorRegisterForm() {
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <Input
             label="Account Username"
+            required
             placeholder="grand_horizon"
             autoComplete="username"
             error={errors.username?.message}
@@ -145,6 +155,7 @@ export function VendorRegisterForm() {
           />
           <Input
             label="Business Email"
+            required
             type="email"
             placeholder="contact@grandhorizon.com"
             autoComplete="email"
@@ -157,17 +168,22 @@ export function VendorRegisterForm() {
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <Input
             label="Password"
+            required
             type="password"
             placeholder="••••••••"
+            autoComplete="new-password"
             showPasswordToggle
             startIcon={<Lock className="h-4 w-4" />}
             error={errors.password?.message}
+            helperText="At least 8 characters"
             {...register('password')}
           />
           <Input
             label="Confirm Password"
+            required
             type="password"
             placeholder="••••••••"
+            autoComplete="new-password"
             showPasswordToggle
             startIcon={<Lock className="h-4 w-4" />}
             error={errors.password_confirm?.message}
@@ -182,19 +198,9 @@ export function VendorRegisterForm() {
           className="w-full mt-2"
           isLoading={isSubmitting}
         >
-          <span>Register Vendor Profile</span>
+          <span>Create Vendor Account</span>
           <ArrowRight className="h-4 w-4 ml-1" />
         </Button>
-
-        <div className="pt-4 text-center text-xs text-stone-500 border-t border-stone-100">
-          Already have an account?{' '}
-          <Link
-            href="/login"
-            className="font-bold text-[#762D46] hover:text-[#A84A63] underline underline-offset-4 transition-colors"
-          >
-            Sign in here
-          </Link>
-        </div>
       </form>
     </Card>
   );

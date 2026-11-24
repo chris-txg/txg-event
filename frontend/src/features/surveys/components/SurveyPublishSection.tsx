@@ -12,6 +12,8 @@ import {
   Sparkles,
   Gift,
   Check,
+  Tag,
+  Ticket,
 } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { Alert } from '@/components/ui/Alert';
@@ -20,11 +22,13 @@ import {
   SurveyDetail,
   SurveyPaymentOrderResponse,
   SurveyPricingOption,
+  CouponValidateResponse,
 } from '@/features/surveys/types/survey.types';
 import {
   usePublishSurvey,
   useCreateSurveyPaymentOrder,
   useSurveyPricingOptions,
+  useValidateCoupon,
   SurveyApiError,
 } from '@/features/surveys/hooks/useSurveys';
 import { RazorpayPaymentModal } from './RazorpayPaymentModal';
@@ -50,20 +54,58 @@ export function SurveyPublishSection({
   const [isCloseModalOpen, setIsCloseModalOpen] = useState(false);
   const [processingPlanCode, setProcessingPlanCode] = useState<string | null>(null);
 
+  // Coupon state
+  const [couponInput, setCouponInput] = useState('');
+  const [validatedCoupon, setValidatedCoupon] = useState<CouponValidateResponse | null>(null);
+  const [couponError, setCouponError] = useState<string | null>(null);
+
   const { data: pricingOptions, isLoading: isLoadingPricing } = useSurveyPricingOptions({
     enabled: survey.status === 'draft',
   });
 
   const publishMutation = usePublishSurvey();
   const createOrderMutation = useCreateSurveyPaymentOrder();
+  const validateCouponMutation = useValidateCoupon();
 
   const hasQuestions = survey.questions && survey.questions.length > 0;
   const isDraft = survey.status === 'draft';
   const isPublished = survey.status === 'published';
   const isClosed = survey.status === 'closed';
 
+  // Handle Coupon Validation
+  const handleApplyCoupon = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    setCouponError(null);
+    const code = couponInput.trim().toUpperCase();
+    if (!code) {
+      setCouponError('Please enter a coupon code.');
+      return;
+    }
+
+    try {
+      const res = await validateCouponMutation.mutateAsync({
+        surveyId: survey.id,
+        payload: { coupon_code: code },
+      });
+      setValidatedCoupon(res);
+      setCouponInput('');
+    } catch (err) {
+      setValidatedCoupon(null);
+      if (err instanceof SurveyApiError) {
+        setCouponError(err.message);
+      } else {
+        setCouponError('Invalid or expired coupon code.');
+      }
+    }
+  };
+
+  const handleRemoveCoupon = () => {
+    setValidatedCoupon(null);
+    setCouponError(null);
+  };
+
   // Handle Free or Already Paid Publishing
-  const handlePublishFreeOrPaid = async (pricingCode?: string) => {
+  const handlePublishFreeOrPaid = async (pricingCode?: string, couponCode?: string) => {
     setErrorMessage(null);
     setSuccessMessage(null);
     setProcessingPlanCode(pricingCode || 'free');
@@ -75,9 +117,13 @@ export function SurveyPublishSection({
     }
 
     try {
+      const activeCoupon = couponCode || validatedCoupon?.coupon_code;
       const result = await publishMutation.mutateAsync({
         surveyId: survey.id,
-        payload: pricingCode ? { pricing_option_code: pricingCode } : undefined,
+        payload: {
+          ...(pricingCode ? { pricing_option_code: pricingCode } : {}),
+          ...(activeCoupon ? { coupon_code: activeCoupon } : {}),
+        },
       });
       setSuccessMessage(result.message || 'Survey published successfully!');
       if (onSurveyUpdated) onSurveyUpdated();
@@ -115,7 +161,10 @@ export function SurveyPublishSection({
     try {
       const order = await createOrderMutation.mutateAsync({
         surveyId: survey.id,
-        payload: pricingCode ? { pricing_option_code: pricingCode } : undefined,
+        payload: {
+          ...(pricingCode ? { pricing_option_code: pricingCode } : {}),
+          ...(validatedCoupon?.coupon_code ? { coupon_code: validatedCoupon.coupon_code } : {}),
+        },
       });
       setActivePaymentOrder(order);
       setIsPaymentModalOpen(true);
@@ -275,13 +324,85 @@ export function SurveyPublishSection({
             </div>
           ) : (
             /* Pricing Tier Selection Grid */
-            <div className="space-y-3">
+            <div className="space-y-4">
               <div className="flex items-center justify-between">
                 <h3 className="text-sm font-bold text-[#30232A] flex items-center gap-1.5">
                   <Sparkles className="w-4 h-4 text-[#762D46]" />
                   <span>Select Publishing Tier</span>
                 </h3>
                 <span className="text-xs text-stone-500">Choose a plan to publish your survey</span>
+              </div>
+
+              {/* Coupon Code Input Box */}
+              <div className="bg-[#FAF5F7] border border-[#E9DDE1] rounded-xl p-3.5 space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold text-[#421827] flex items-center gap-1.5">
+                    <Ticket className="w-3.5 h-3.5 text-[#762D46]" />
+                    Have a promo or coupon code?
+                  </span>
+                  <span className="text-[10px] text-stone-400 font-medium">
+                    Try &apos;LAUNCH50&apos; or &apos;VIPFREE&apos;
+                  </span>
+                </div>
+
+                {validatedCoupon ? (
+                  <div className="flex items-center justify-between p-2.5 bg-emerald-50 border border-emerald-200 rounded-lg text-xs">
+                    <div className="flex items-center gap-2">
+                      <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                      <div>
+                        <span className="font-bold text-emerald-950">
+                          Coupon &apos;{validatedCoupon.coupon_code}&apos; Applied!
+                        </span>
+                        <p className="text-[11px] text-emerald-800">
+                          {validatedCoupon.discount_type === 'PERCENTAGE'
+                            ? `${validatedCoupon.discount_value}% Discount`
+                            : `₹${validatedCoupon.discount_value} Discount`}
+                          {' — '}
+                          Payable: ₹{validatedCoupon.final_price}
+                        </p>
+                      </div>
+                    </div>
+                    <button
+                      onClick={handleRemoveCoupon}
+                      className="text-xs font-bold text-emerald-800 hover:text-emerald-950 underline ml-3 cursor-pointer"
+                    >
+                      Remove
+                    </button>
+                  </div>
+                ) : (
+                  <form onSubmit={handleApplyCoupon} className="space-y-1.5" noValidate>
+                    <div className="flex gap-2">
+                      <input
+                        type="text"
+                        value={couponInput}
+                        maxLength={30}
+                        onChange={(e) => {
+                          setCouponInput(e.target.value.toUpperCase());
+                          if (couponError) setCouponError(null);
+                        }}
+                        placeholder="Enter code (e.g. LAUNCH50)"
+                        aria-invalid={Boolean(couponError)}
+                        className={`flex-1 px-3 py-1.5 text-xs font-mono uppercase rounded-lg transition-all focus:outline-none ${
+                          couponError
+                            ? 'border border-rose-500 ring-2 ring-rose-500/20 bg-rose-50/20 text-rose-900'
+                            : 'bg-white border border-[#E9DDE1] focus:ring-1 focus:ring-[#762D46]'
+                        }`}
+                      />
+                      <button
+                        type="submit"
+                        disabled={validateCouponMutation.isPending || !couponInput.trim()}
+                        className="px-4 py-1.5 text-xs font-bold text-white bg-[#762D46] hover:bg-[#542037] disabled:opacity-50 rounded-lg transition-all cursor-pointer"
+                      >
+                        {validateCouponMutation.isPending ? 'Checking...' : 'Apply'}
+                      </button>
+                    </div>
+                    {couponError && (
+                      <p className="text-xs text-rose-600 font-medium leading-tight">
+                        {couponError}
+                      </p>
+                    )}
+                  </form>
+                )}
               </div>
 
               {isLoadingPricing ? (
@@ -329,7 +450,16 @@ export function SurveyPublishSection({
                                   {plan.name}
                                 </span>
                                 <h4 className="text-base font-bold text-[#30232A] mt-1.5">
-                                  {isFreePlan ? 'Free Tier' : `₹${plan.price} ${plan.currency || 'INR'}`}
+                                  {isFreePlan ? (
+                                    'Free Tier'
+                                  ) : validatedCoupon ? (
+                                    <span className="flex items-center gap-2">
+                                      <span className="line-through text-stone-400 text-xs">₹{plan.price}</span>
+                                      <span className="text-[#762D46]">₹{validatedCoupon.final_price}</span>
+                                    </span>
+                                  ) : (
+                                    `₹${plan.price} ${plan.currency || 'INR'}`
+                                  )}
                                 </h4>
                               </div>
 
@@ -378,6 +508,16 @@ export function SurveyPublishSection({
                                 <Send className="w-3.5 h-3.5 mr-1.5" />
                                 {hasFreeCredit ? 'Publish for Free' : 'Free Credit Exhausted'}
                               </Button>
+                            ) : Number(validatedCoupon?.final_price) === 0 ? (
+                              <Button
+                                onClick={() => handlePublishFreeOrPaid(plan.code, validatedCoupon?.coupon_code)}
+                                disabled={!hasQuestions || publishMutation.isPending}
+                                isLoading={isProcessingThis && publishMutation.isPending}
+                                className="w-full text-xs font-semibold bg-emerald-700 hover:bg-emerald-800 text-white"
+                              >
+                                <Send className="w-3.5 h-3.5 mr-1.5" />
+                                Publish Free with Coupon
+                              </Button>
                             ) : (
                               <Button
                                 onClick={() => initiatePaymentOrder(plan.code)}
@@ -390,7 +530,7 @@ export function SurveyPublishSection({
                                 className="w-full text-xs font-semibold"
                               >
                                 <CreditCard className="w-3.5 h-3.5 mr-1.5" />
-                                Pay ₹{plan.price} & Publish
+                                Pay {validatedCoupon ? `₹${validatedCoupon.final_price}` : `₹${plan.price}`} & Publish
                               </Button>
                             )}
                           </div>

@@ -113,6 +113,7 @@ export default function ProjectsPage() {
           <input
             type="text"
             value={searchTerm}
+            maxLength={100}
             onChange={(e) => setSearchTerm(e.target.value)}
             placeholder="Search projects by name, city, or category..."
             className="w-full pl-9 pr-24 py-2 text-sm bg-[#FBF7F8] border border-[#E9DDE1] rounded-lg text-[#30232A] placeholder-[#75666D] focus:outline-none focus:border-[#762D46] focus:ring-1 focus:ring-[#762D46] transition-all"

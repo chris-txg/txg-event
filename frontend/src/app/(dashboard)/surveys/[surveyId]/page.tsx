@@ -5,7 +5,6 @@ import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import {
   ClipboardList,
-  FolderKanban,
   Edit3,
   Trash2,
   Clock,
@@ -25,7 +24,6 @@ import { DeleteSurveyModal } from '@/features/surveys/components/DeleteSurveyMod
 import { QuestionBuilder } from '@/features/surveys/components/QuestionBuilder';
 import { SurveyPublishSection } from '@/features/surveys/components/SurveyPublishSection';
 import { SurveyShareSection } from '@/features/surveys/components/SurveyShareSection';
-import { SurveyAnalyticsSection } from '@/features/surveys/components/SurveyAnalyticsSection';
 import { Spinner } from '@/components/ui/Spinner';
 import { Alert } from '@/components/ui/Alert';
 
@@ -34,7 +32,6 @@ function SurveyDetailContent() {
   const surveyId = params?.surveyId as string;
   const router = useRouter();
 
-  const [activeTab, setActiveTab] = useState<'builder' | 'analytics'>('builder');
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
 
   const {
@@ -149,33 +146,6 @@ function SurveyDetailContent() {
 
   return (
     <div className="space-y-8 animate-fadeIn text-left max-w-5xl">
-      {/* Context Breadcrumbs */}
-      <div className="flex items-center justify-between text-xs text-stone-500">
-        <div className="flex items-center gap-2">
-          <Link href="/surveys" className="hover:text-[#762D46] transition-colors">
-            Surveys
-          </Link>
-          <span>/</span>
-          {survey.project_name && (
-            <>
-              <Link href={`/projects/${survey.project}`} className="hover:text-[#762D46] transition-colors truncate max-w-xs">
-                {survey.project_name}
-              </Link>
-              <span>/</span>
-            </>
-          )}
-          <span className="text-stone-800 font-semibold truncate max-w-xs">{survey.title}</span>
-        </div>
-
-        <Link
-          href="/surveys"
-          className="inline-flex items-center gap-1 text-xs font-semibold text-[#762D46] hover:underline"
-        >
-          <ArrowLeft className="w-3.5 h-3.5" />
-          <span>All Surveys</span>
-        </Link>
-      </div>
-
       {/* Main Hero Header Card */}
       <div className="bg-white rounded-2xl border border-[#E9DDE1] p-6 sm:p-8 shadow-xs space-y-6">
         <div className="flex flex-col md:flex-row md:items-start justify-between gap-6 pb-6 border-b border-[#F8EFF2]">
@@ -183,15 +153,6 @@ function SurveyDetailContent() {
             <div className="flex flex-wrap items-center gap-2.5">
               {renderStatusBadge(survey.status)}
               {renderVisibilityBadge(survey.visibility)}
-              {survey.project_name && (
-                <Link
-                  href={`/projects/${survey.project}`}
-                  className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-[#F4E5EA] text-[#762D46] hover:bg-[#EAD0D9] transition-colors"
-                >
-                  <FolderKanban className="w-3.5 h-3.5 text-[#A84A63]" />
-                  <span>{survey.project_name}</span>
-                </Link>
-              )}
             </div>
 
             <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-[#30232A]">
@@ -271,71 +232,22 @@ function SurveyDetailContent() {
         </div>
       </div>
 
-      {/* Primary Section Navigation Tabs */}
-      <div className="flex items-center gap-2 border-b border-[#E9DDE1] pb-px">
-        <button
-          type="button"
-          onClick={() => setActiveTab('builder')}
-          className={`flex items-center gap-2 px-4 py-2.5 text-xs font-bold border-b-2 transition-all cursor-pointer ${
-            activeTab === 'builder'
-              ? 'border-[#762D46] text-[#762D46]'
-              : 'border-transparent text-stone-500 hover:text-stone-800'
-          }`}
-        >
-          <Edit3 className="w-4 h-4" />
-          <span>Builder & Lifecycle</span>
-        </button>
-
-        <button
-          type="button"
-          onClick={() => setActiveTab('analytics')}
-          className={`flex items-center gap-2 px-4 py-2.5 text-xs font-bold border-b-2 transition-all cursor-pointer ${
-            activeTab === 'analytics'
-              ? 'border-[#762D46] text-[#762D46]'
-              : 'border-transparent text-stone-500 hover:text-stone-800'
-          }`}
-        >
-          <ClipboardList className="w-4 h-4" />
-          <span>Analytics & Submissions</span>
-          <span
-            className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
-              activeTab === 'analytics'
-                ? 'bg-[#762D46] text-white'
-                : 'bg-stone-200 text-stone-700'
-            }`}
-          >
-            {survey.response_count ?? 0}
-          </span>
-        </button>
-      </div>
-
-      {/* Tab Panels */}
-      {activeTab === 'builder' ? (
-        <div className="space-y-8">
-          {/* Survey Publishing & Lifecycle Section */}
-          <SurveyPublishSection
-            survey={survey}
-            onSurveyUpdated={() => {
-              refetch();
-            }}
-            onNavigateToAnalytics={() => setActiveTab('analytics')}
-          />
-
-          {/* Direct Respondent Sharing & Distribution Section */}
-          <SurveyShareSection survey={survey} />
-
-          {/* Survey Question Builder */}
-          <QuestionBuilder survey={survey} />
-        </div>
-      ) : (
-        /* Analytics & Responses Dashboard */
-        <SurveyAnalyticsSection
+      {/* Builder & Lifecycle Sections */}
+      <div className="space-y-8">
+        {/* Survey Publishing & Lifecycle Section */}
+        <SurveyPublishSection
           survey={survey}
-          onCopyShareLink={() => {
-            setActiveTab('builder');
+          onSurveyUpdated={() => {
+            refetch();
           }}
         />
-      )}
+
+        {/* Direct Respondent Sharing & Distribution Section */}
+        <SurveyShareSection survey={survey} />
+
+        {/* Survey Question Builder */}
+        <QuestionBuilder survey={survey} />
+      </div>
 
       {/* Delete Survey Confirmation Modal */}
       <DeleteSurveyModal

@@ -45,6 +45,18 @@ export const createSurveySchema = z
     end_date: optionalIsoDateTime,
   })
   .superRefine((data, ctx) => {
+    if (data.start_date) {
+      const startTime = new Date(data.start_date).getTime();
+      // Allow 2-minute buffer for form fill time
+      if (!isNaN(startTime) && startTime < Date.now() - 120 * 1000) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: 'Start date and time cannot be in the past',
+          path: ['start_date'],
+        });
+      }
+    }
+
     if (data.start_date && data.end_date) {
       const start = new Date(data.start_date).getTime();
       const end = new Date(data.end_date).getTime();
@@ -123,6 +135,16 @@ export const createQuestionSchema = z
           message: 'Single and multiple choice questions require at least 2 options',
           path: ['choices'],
         });
+      } else {
+        const lowerChoices = data.choices.map((c) => c.toLowerCase());
+        const hasDuplicates = new Set(lowerChoices).size !== lowerChoices.length;
+        if (hasDuplicates) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            message: 'Choice options must be unique (no duplicate choices allowed)',
+            path: ['choices'],
+          });
+        }
       }
     }
   });

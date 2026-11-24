@@ -14,7 +14,8 @@ import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
 import { Alert } from '@/components/ui/Alert';
 import { Card, CardHeader, CardTitle, CardDescription } from '@/components/ui/Card';
-import { Lock, ArrowRight, CheckCircle2 } from 'lucide-react';
+import { Lock, CheckCircle2, ArrowRight } from 'lucide-react';
+import { scrollToFirstFormError } from '@/lib/utils/formValidation';
 
 export function ResetPasswordForm() {
   const searchParams = useSearchParams();
@@ -40,27 +41,29 @@ export function ResetPasswordForm() {
 
   const onSubmit = async (data: ResetPasswordConfirmFormData) => {
     setErrorMessage(null);
-    try {
-      const res = await authClientService.resetPassword({
-        ...data,
-        uid: data.uid || uid,
-        token: data.token || token,
-      });
 
+    if (!data.uid || !data.token) {
+      setErrorMessage('The reset password link is missing or invalid.');
+      return;
+    }
+
+    try {
+      const res = await authClientService.resetPassword(data);
       if (!res.ok) {
-        let msg = 'Password reset failed. The link may have expired or is invalid.';
+        let msg = 'Failed to reset password. The link may have expired.';
         if (typeof res.error === 'object' && res.error !== null) {
-          const errObj = res.error as Record<string, unknown>;
+          const errObj = res.error as Record<string, string[] | string>;
           if (errObj.detail && typeof errObj.detail === 'string') {
             msg = errObj.detail;
-          } else if (errObj.error && typeof errObj.error === 'string') {
-            msg = errObj.error;
+          } else if (errObj.new_password && Array.isArray(errObj.new_password)) {
+            msg = errObj.new_password[0];
+          } else if (errObj.token && Array.isArray(errObj.token)) {
+            msg = 'This password reset link is invalid or has already been used.';
           }
         }
         setErrorMessage(msg);
         return;
       }
-
       setSuccess(true);
     } catch (err) {
       setErrorMessage(err instanceof Error ? err.message : 'Network error. Please try again.');
@@ -73,16 +76,13 @@ export function ResetPasswordForm() {
         <CardHeader>
           <CardTitle>Invalid Reset Link</CardTitle>
           <CardDescription>
-            The password reset link appears incomplete or missing authentication parameters.
+            This password reset link is invalid or incomplete. Please request a new one.
           </CardDescription>
         </CardHeader>
-        <div className="space-y-4">
-          <Alert variant="warning" title="Missing Token Parameters">
-            Please make sure you followed the full link provided in your password reset email.
-          </Alert>
+        <div className="pt-2">
           <Link href="/forgot-password" className="block">
-            <Button variant="outline" size="md" className="w-full">
-              <span>Request a new link</span>
+            <Button variant="primary" size="md" className="w-full">
+              <span>Request New Link</span>
             </Button>
           </Link>
         </div>
@@ -93,9 +93,9 @@ export function ResetPasswordForm() {
   return (
     <Card className="w-full">
       <CardHeader>
-        <CardTitle>Set New Password</CardTitle>
+        <CardTitle>Choose a new password</CardTitle>
         <CardDescription>
-          Choose a secure password with at least 8 characters
+          Enter and confirm your new password below.
         </CardDescription>
       </CardHeader>
 
@@ -115,7 +115,11 @@ export function ResetPasswordForm() {
           </Link>
         </div>
       ) : (
-        <form onSubmit={handleSubmit(onSubmit)} className="space-y-4" noValidate>
+        <form
+          onSubmit={handleSubmit(onSubmit, (errs) => scrollToFirstFormError(errs))}
+          className="space-y-4"
+          noValidate
+        >
           {errorMessage && (
             <Alert variant="error" title="Reset Failed">
               {errorMessage}
@@ -127,16 +131,19 @@ export function ResetPasswordForm() {
 
           <Input
             label="New Password"
+            required
             type="password"
             placeholder="••••••••"
             showPasswordToggle
             startIcon={<Lock className="h-4 w-4" />}
             error={errors.new_password?.message}
+            helperText="At least 8 characters"
             {...register('new_password')}
           />
 
           <Input
             label="Confirm New Password"
+            required
             type="password"
             placeholder="••••••••"
             showPasswordToggle
@@ -149,7 +156,7 @@ export function ResetPasswordForm() {
             type="submit"
             variant="primary"
             size="lg"
-            className="w-full mt-2"
+            className="w-full"
             isLoading={isSubmitting}
           >
             <span>Update Password</span>

@@ -16,9 +16,9 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
         </Link>
       </div>
 
-      <div className="w-full max-w-[1020px] grid grid-cols-1 lg:grid-cols-12 gap-8 items-stretch">
+      <div className="w-full max-w-[1020px] grid grid-cols-1 lg:grid-cols-12 gap-6 lg:gap-8 items-stretch">
         {/* Left Branded Showcase Panel */}
-        <div className="relative overflow-hidden rounded-3xl p-8 sm:p-10 text-white flex flex-col justify-between lg:col-span-5 bg-gradient-to-br from-[#421827] via-[#5C2337] to-[#7B354F] shadow-[0_20px_50px_rgba(66,24,39,0.22)] border border-white/10 min-h-[420px]">
+        <div className="relative overflow-hidden rounded-3xl p-6 sm:p-10 text-white flex flex-col justify-between lg:col-span-5 bg-gradient-to-br from-[#421827] via-[#5C2337] to-[#7B354F] shadow-[0_20px_50px_rgba(66,24,39,0.22)] border border-white/10 lg:min-h-[540px]">
           {/* Subtle concentric circles */}
           <div
             aria-hidden="true"

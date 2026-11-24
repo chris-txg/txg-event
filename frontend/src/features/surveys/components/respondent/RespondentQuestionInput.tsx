@@ -42,7 +42,7 @@ export function RespondentQuestionInput({
           aria-describedby={error ? errorId : undefined}
           className={cn(
             'w-full rounded-xl border border-stone-200 bg-white p-3.5 text-sm text-[#421827] placeholder:text-stone-400 transition-all duration-200 focus:outline-none focus:border-[#762D46] focus:ring-2 focus:ring-[#762D46]/20 disabled:bg-stone-50 disabled:cursor-not-allowed resize-y min-h-[90px]',
-            error && 'border-rose-400 focus:border-rose-500 focus:ring-rose-500/20 text-rose-900'
+            error && 'border-rose-500 focus:border-rose-500 ring-2 ring-rose-500/20 bg-rose-50/20 text-rose-900'
           )}
         />
       </div>

@@ -26,15 +26,28 @@ export const vendorCategoryEnum = z.enum([
 
 export const vendorRegisterSchema = z
   .object({
-    email: z.string().email('Please enter a valid email address').trim().toLowerCase(),
+    email: z
+      .string()
+      .trim()
+      .min(1, 'Email address is required')
+      .email('Please enter a valid email address')
+      .toLowerCase(),
     username: z
       .string()
+      .trim()
       .min(3, 'Username must be at least 3 characters')
       .max(150, 'Username must be at most 150 characters')
-      .regex(/^[\w.@+-]+$/, 'Letters, digits and @/./+/-/_ only')
-      .trim(),
-    first_name: z.string().min(1, 'First name is required').max(150).trim(),
-    last_name: z.string().min(1, 'Last name is required').max(150).trim(),
+      .regex(/^[\w.@+-]+$/, 'Letters, digits and @/./+/-/_ only'),
+    first_name: z
+      .string()
+      .trim()
+      .min(1, 'First name is required')
+      .max(150),
+    last_name: z
+      .string()
+      .trim()
+      .min(1, 'Last name is required')
+      .max(150),
     phone: z
       .string()
       .trim()
@@ -44,11 +57,15 @@ export const vendorRegisterSchema = z
       }),
     business_name: z
       .string()
+      .trim()
       .min(2, 'Business name is required (at least 2 characters)')
-      .max(255)
-      .trim(),
+      .max(255),
     business_category: vendorCategoryEnum,
-    city: z.string().min(2, 'City is required (at least 2 characters)').max(100).trim(),
+    city: z
+      .string()
+      .trim()
+      .min(2, 'City is required (at least 2 characters)')
+      .max(100),
     password: z.string().min(8, 'Password must be at least 8 characters'),
     password_confirm: z.string().min(1, 'Please confirm your password'),
   })

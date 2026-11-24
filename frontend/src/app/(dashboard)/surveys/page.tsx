@@ -7,7 +7,6 @@ import {
   Plus,
   Filter,
   Eye,
-  Edit3,
   Trash2,
   Calendar,
   Globe,
@@ -15,8 +14,6 @@ import {
   FileSpreadsheet,
   FolderKanban,
   CheckCircle2,
-  ChevronLeft,
-  ChevronRight,
   TrendingUp,
 } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
@@ -28,6 +25,7 @@ import {
 } from '@/features/surveys/types/survey.types';
 import { projectClientService } from '@/features/projects/services/projectClientService';
 import { DeleteSurveyModal } from '@/features/surveys/components/DeleteSurveyModal';
+import { Pagination } from '@/components/ui/Pagination';
 import { Spinner } from '@/components/ui/Spinner';
 import { Alert } from '@/components/ui/Alert';
 
@@ -35,8 +33,10 @@ export default function GlobalSurveysPage() {
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [visibilityFilter, setVisibilityFilter] = useState<string>('all');
   const [projectFilter, setProjectFilter] = useState<string>('all');
+  const [fromDate, setFromDate] = useState<string>('');
+  const [toDate, setToDate] = useState<string>('');
   const [page, setPage] = useState<number>(1);
-  const pageSize = 12;
+  const [pageSize, setPageSize] = useState<number>(10);
 
   const [surveyToDelete, setSurveyToDelete] = useState<SurveyListItem | null>(null);
 
@@ -55,6 +55,8 @@ export default function GlobalSurveysPage() {
     status: statusFilter === 'all' ? undefined : (statusFilter as SurveyStatus),
     visibility: visibilityFilter === 'all' ? undefined : (visibilityFilter as SurveyVisibility),
     project: projectFilter === 'all' ? undefined : projectFilter,
+    from_date: fromDate || undefined,
+    to_date: toDate || undefined,
     page,
     page_size: pageSize,
   };
@@ -65,7 +67,9 @@ export default function GlobalSurveysPage() {
     isError,
     error,
     refetch,
-  } = useSurveys(queryFilters);
+  } = useSurveys(queryFilters, {
+    staleTime: 30 * 1000, // 30s cache retention for instant back-navigation between page sizes
+  });
 
   const surveys = paginatedData?.results || [];
   const totalCount = paginatedData?.count || 0;
@@ -253,6 +257,59 @@ export default function GlobalSurveysPage() {
               ))}
             </select>
           )}
+
+          {/* From Date Filter */}
+          <div className={`flex items-center gap-1.5 rounded-xl border bg-white px-2.5 py-1.5 text-xs text-[#421827] ${
+            fromDate && toDate && toDate < fromDate ? 'border-rose-400 bg-rose-50/20' : 'border-stone-200'
+          }`}>
+            <Calendar className="w-3.5 h-3.5 text-stone-400" />
+            <span className="text-[11px] text-stone-400 font-medium">From:</span>
+            <input
+              type="date"
+              max={toDate || undefined}
+              value={fromDate}
+              onChange={(e) => {
+                setFromDate(e.target.value);
+                setPage(1);
+              }}
+              className="bg-transparent text-xs text-stone-700 focus:outline-none cursor-pointer"
+            />
+          </div>
+
+          {/* To Date Filter */}
+          <div className={`flex items-center gap-1.5 rounded-xl border bg-white px-2.5 py-1.5 text-xs text-[#421827] ${
+            fromDate && toDate && toDate < fromDate ? 'border-rose-400 bg-rose-50/20' : 'border-stone-200'
+          }`}>
+            <Calendar className="w-3.5 h-3.5 text-stone-400" />
+            <span className="text-[11px] text-stone-400 font-medium">To:</span>
+            <input
+              type="date"
+              min={fromDate || undefined}
+              value={toDate}
+              onChange={(e) => {
+                setToDate(e.target.value);
+                setPage(1);
+              }}
+              className="bg-transparent text-xs text-stone-700 focus:outline-none cursor-pointer"
+            />
+          </div>
+
+          {/* Reset Filters Button */}
+          {(statusFilter !== 'all' || visibilityFilter !== 'all' || projectFilter !== 'all' || fromDate || toDate) && (
+            <button
+              onClick={() => {
+                setStatusFilter('all');
+                setVisibilityFilter('all');
+                setProjectFilter('all');
+                setFromDate('');
+                setToDate('');
+                setPage(1);
+              }}
+              className="text-xs font-semibold text-[#762D46] hover:underline cursor-pointer px-1"
+            >
+              Reset
+            </button>
+          )}
         </div>
 
         <div className="text-xs text-stone-500">
@@ -324,10 +381,65 @@ export default function GlobalSurveysPage() {
         </div>
       )}
 
-      {/* Surveys Table */}
+      {/* Surveys List & Table */}
       {!isLoading && !isError && surveys.length > 0 && (
         <div className="bg-white rounded-2xl border border-[#E9DDE1] shadow-xs overflow-hidden">
-          <div className="overflow-x-auto">
+          {/* Mobile Card Presentation (< md) */}
+          <div className="md:hidden divide-y divide-[#F8EFF2]">
+            {surveys.map((survey) => (
+              <div key={survey.id} className="p-4 space-y-3 hover:bg-[#FDF9FA] transition-colors">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0 flex-1">
+                    <Link
+                      href={`/surveys/${survey.id}`}
+                      className="font-bold text-[#30232A] hover:text-[#762D46] hover:underline text-sm leading-snug line-clamp-2"
+                    >
+                      {survey.title}
+                    </Link>
+                    {survey.description && (
+                      <p className="text-xs text-stone-500 line-clamp-2 mt-1">
+                        {survey.description}
+                      </p>
+                    )}
+                  </div>
+                  <div className="shrink-0 flex items-center gap-1">
+                    <Link
+                      href={`/surveys/${survey.id}`}
+                      className="p-2 text-stone-500 hover:text-[#762D46] hover:bg-[#F4E5EA]/60 rounded-lg transition-colors"
+                      title="View Survey"
+                    >
+                      <Eye className="w-4 h-4" />
+                    </Link>
+                    <button
+                      onClick={() => setSurveyToDelete(survey)}
+                      className="p-2 text-stone-500 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors cursor-pointer"
+                      title="Delete Survey"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </div>
+                </div>
+
+                <div className="flex flex-wrap items-center gap-2 pt-1 text-xs">
+                  {renderStatusBadge(survey.status)}
+                  {renderVisibilityBadge(survey.visibility)}
+                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-stone-100 text-stone-700 font-semibold text-[11px]">
+                    {survey.response_count} responses
+                  </span>
+                </div>
+
+                <div className="flex items-center justify-between text-xs text-stone-400 pt-1 border-t border-stone-100/80">
+                  <span className="truncate max-w-[200px]">
+                    {survey.project_name || `Project #${survey.project.slice(0, 8)}`}
+                  </span>
+                  <span>{formatDateRange(survey.start_date, survey.end_date)}</span>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {/* Desktop Table Presentation (>= md) */}
+          <div className="hidden md:block overflow-x-auto">
             <table className="w-full text-left border-collapse text-sm">
               <thead>
                 <tr className="border-b border-[#F8EFF2] bg-[#FDFBFB] text-[11px] font-semibold uppercase tracking-wider text-stone-500">
@@ -394,13 +506,6 @@ export default function GlobalSurveysPage() {
                         >
                           <Eye className="w-4 h-4" />
                         </Link>
-                        <Link
-                          href={`/surveys/${survey.id}/edit`}
-                          className="p-1.5 text-stone-500 hover:text-[#762D46] hover:bg-[#F4E5EA]/60 rounded-lg transition-colors"
-                          title="Edit Survey"
-                        >
-                          <Edit3 className="w-4 h-4" />
-                        </Link>
                         <button
                           onClick={() => setSurveyToDelete(survey)}
                           className="p-1.5 text-stone-500 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors cursor-pointer"
@@ -416,33 +521,20 @@ export default function GlobalSurveysPage() {
             </table>
           </div>
 
-          {/* Pagination */}
-          {totalPages > 1 && (
-            <div className="flex items-center justify-between px-4 py-3 bg-[#FDFBFB] border-t border-[#F8EFF2] text-xs text-stone-600">
-              <div>
-                Page <strong className="font-semibold text-stone-900">{page}</strong> of{' '}
-                <strong className="font-semibold text-stone-900">{totalPages}</strong> ({totalCount} total)
-              </div>
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={() => setPage((p) => Math.max(1, p - 1))}
-                  disabled={page <= 1}
-                  className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg border border-stone-200 bg-white hover:bg-stone-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-                >
-                  <ChevronLeft className="w-3.5 h-3.5" />
-                  <span>Previous</span>
-                </button>
-                <button
-                  onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-                  disabled={page >= totalPages}
-                  className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg border border-stone-200 bg-white hover:bg-stone-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-                >
-                  <span>Next</span>
-                  <ChevronRight className="w-3.5 h-3.5" />
-                </button>
-              </div>
-            </div>
-          )}
+          {/* Centralized Pagination */}
+          <Pagination
+            currentPage={page}
+            totalPages={totalPages}
+            totalCount={totalCount}
+            pageSize={pageSize}
+            pageSizeOptions={[5, 10, 20, 50]}
+            onPageChange={(newPage) => setPage(newPage)}
+            onPageSizeChange={(newSize) => {
+              setPageSize(newSize);
+              setPage(1);
+            }}
+            isLoading={isLoading}
+          />
         </div>
       )}
 

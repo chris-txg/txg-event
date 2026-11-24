@@ -24,6 +24,8 @@ import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
 import { Alert } from '@/components/ui/Alert';
 import { Spinner } from '@/components/ui/Spinner';
+import { scrollToFirstFormError } from '@/lib/utils/formValidation';
+import { getFieldClass } from '@/lib/utils/formStyles';
 
 export interface QuestionModalProps {
   isOpen: boolean;
@@ -81,6 +83,7 @@ function QuestionModalContent({
   // Validation & Error states
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [apiError, setApiError] = useState<string | null>(null);
+  const formRef = React.useRef<HTMLFormElement>(null);
 
   // Mutations & Query Client
   const queryClient = useQueryClient();
@@ -201,6 +204,7 @@ function QuestionModalContent({
           fieldErrors[path] = issue.message;
         }
         setErrors(fieldErrors);
+        scrollToFirstFormError(fieldErrors, formRef.current);
         return;
       }
 
@@ -232,6 +236,7 @@ function QuestionModalContent({
           fieldErrors[path] = issue.message;
         }
         setErrors(fieldErrors);
+        scrollToFirstFormError(fieldErrors, formRef.current);
         return;
       }
 
@@ -259,9 +264,9 @@ function QuestionModalContent({
       role="dialog"
       aria-modal="true"
       aria-labelledby="question-modal-title"
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 overflow-y-auto animate-fadeIn"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-3 sm:p-4 overflow-y-auto animate-fadeIn"
     >
-      <div className="bg-white rounded-2xl max-w-lg w-full p-6 sm:p-7 shadow-2xl border border-stone-200 relative text-left my-8 max-h-[90vh] flex flex-col">
+      <div className="bg-white rounded-2xl max-w-lg w-full p-5 sm:p-7 shadow-2xl border border-stone-200 relative text-left my-auto sm:my-8 max-h-[95vh] sm:max-h-[90vh] flex flex-col">
         {/* Header */}
         <div className="flex items-center justify-between pb-4 border-b border-stone-100">
           <div>
@@ -285,7 +290,7 @@ function QuestionModalContent({
         </div>
 
         {/* Scrollable Form Body */}
-        <form onSubmit={handleSubmit} className="space-y-5 py-4 overflow-y-auto flex-1 pr-1">
+        <form ref={formRef} onSubmit={handleSubmit} className="space-y-5 py-4 overflow-y-auto flex-1 pr-1" noValidate>
           {hasResponses && (
             <div className="p-3.5 rounded-xl bg-amber-50 border border-amber-200 text-xs text-amber-900 flex items-start gap-2.5">
               <Lock className="w-4 h-4 text-amber-700 shrink-0 mt-0.5" />
@@ -307,19 +312,28 @@ function QuestionModalContent({
           {/* Question Text */}
           <div className="space-y-1.5">
             <label className="block text-xs font-semibold uppercase tracking-wider text-[#421827]/80">
-              Question Text <span className="text-rose-500">*</span>
+              Question Text <span className="text-rose-500 font-bold ml-1">*</span>
             </label>
             <textarea
+              name="text"
               value={text}
-              onChange={(e) => setText(e.target.value)}
+              onChange={(e) => {
+                setText(e.target.value);
+                if (errors.text) {
+                  setErrors((prev) => {
+                    const next = { ...prev };
+                    delete next.text;
+                    return next;
+                  });
+                }
+              }}
               placeholder="e.g. How satisfied are you with the event organization?"
               rows={3}
               disabled={hasResponses || isSaving}
-              className={`w-full rounded-xl border border-stone-200 bg-white px-3.5 py-2.5 text-sm text-[#421827] placeholder:text-stone-400 transition-all focus:outline-none focus:border-[#762D46] focus:ring-2 focus:ring-[#762D46]/20 disabled:bg-stone-50 disabled:cursor-not-allowed ${
-                errors.text ? 'border-rose-400 focus:border-rose-500 text-rose-900' : ''
-              }`}
+              aria-invalid={Boolean(errors.text)}
+              className={getFieldClass(Boolean(errors.text), 'resize-y')}
             />
-            {errors.text && <p className="text-xs text-rose-600 font-medium">{errors.text}</p>}
+            {errors.text && <p className="text-xs text-rose-600 font-medium mt-1 leading-tight">{errors.text}</p>}
           </div>
 
           {/* Question Type */}
@@ -399,9 +413,19 @@ function QuestionModalContent({
                       </span>
                       <Input
                         value={choice}
-                        onChange={(e) => handleCreateChoiceChange(index, e.target.value)}
+                        onChange={(e) => {
+                          handleCreateChoiceChange(index, e.target.value);
+                          if (errors.choices) {
+                            setErrors((prev) => {
+                              const next = { ...prev };
+                              delete next.choices;
+                              return next;
+                            });
+                          }
+                        }}
                         placeholder={`Option ${index + 1}`}
                         disabled={isSaving}
+                        error={Boolean(errors.choices) && !choice.trim() ? 'Option cannot be empty' : undefined}
                         className="py-1.5 text-xs"
                       />
                       <button

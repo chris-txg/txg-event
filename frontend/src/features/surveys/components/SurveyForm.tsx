@@ -35,6 +35,8 @@ import {
   ArrowLeft,
   Save,
 } from 'lucide-react';
+import { scrollToFirstFormError, getNowDateTimeLocalString } from '@/lib/utils/formValidation';
+import { getFieldClass } from '@/lib/utils/formStyles';
 
 function toLocalDatetimeInput(isoString?: string | null): string {
   if (!isoString) return '';
@@ -119,77 +121,84 @@ export function SurveyForm({
     title: initialData?.title ?? '',
     description: initialData?.description ?? '',
     visibility: initialData?.visibility ?? 'public',
-    allow_anonymous: initialData?.allow_anonymous ?? true,
-    duplicate_rule: initialData?.duplicate_rule ?? 'one_per_ip',
+    allow_anonymous: initialData?.allow_anonymous ?? false,
+    duplicate_rule: initialData?.duplicate_rule ?? 'one_per_user',
     start_date: toLocalDatetimeInput(initialData?.start_date),
     end_date: toLocalDatetimeInput(initialData?.end_date),
   };
+
+  const [minDateTime, setMinDateTime] = useState<string | undefined>(undefined);
+
+  useEffect(() => {
+    setMinDateTime(getNowDateTimeLocalString());
+  }, []);
 
   const {
     register,
     handleSubmit,
     setValue,
-    setError,
-    formState: { errors },
-  } = useForm<SurveyFormInput, unknown, SurveyFormOutput>({
+    watch,
+    formState: { errors, isDirty },
+  } = useForm<SurveyFormInput>({
     resolver: zodResolver(createSurveySchema),
     defaultValues,
   });
 
+  // Keep project field updated when effectiveProjectId changes or projects load
   useEffect(() => {
-    if (lockedProjectId) {
-      setValue('project', lockedProjectId);
+    if (effectiveProjectId) {
+      setValue('project', effectiveProjectId, { shouldValidate: true });
     }
-  }, [lockedProjectId, setValue]);
+  }, [effectiveProjectId, setValue]);
 
-  const handleFormSubmit = async (values: SurveyFormOutput) => {
+  // If projects finish loading in create mode and no project is selected yet, pre-select the first one
+  useEffect(() => {
+    if (mode === 'create' && !lockedProjectId && projects && projects.length > 0) {
+      const currentVal = watch('project');
+      if (!currentVal) {
+        setValue('project', projects[0].id, { shouldValidate: true });
+      }
+    }
+  }, [mode, lockedProjectId, projects, setValue, watch]);
+
+  const watchedAllowAnonymous = watch('allow_anonymous');
+  const watchedVisibility = watch('visibility');
+
+  const handleFormSubmit = async (data: SurveyFormInput) => {
     setGeneralError(null);
-
-    const formattedPayload = {
-      project: values.project,
-      title: values.title.trim(),
-      description: values.description ? values.description.trim() : '',
-      visibility: values.visibility,
-      allow_anonymous: values.allow_anonymous,
-      duplicate_rule: values.duplicate_rule,
-      start_date: toBackendIsoString(values.start_date),
-      end_date: toBackendIsoString(values.end_date),
-    };
-
     try {
+      const validated = data as SurveyFormOutput;
+      const formattedPayload = {
+        project: validated.project,
+        title: validated.title.trim(),
+        description: validated.description?.trim() || undefined,
+        visibility: validated.visibility,
+        allow_anonymous: validated.allow_anonymous,
+        duplicate_rule: validated.duplicate_rule,
+        start_date: toBackendIsoString(validated.start_date),
+        end_date: toBackendIsoString(validated.end_date),
+      };
+
       await onSubmit(formattedPayload);
     } catch (err) {
       if (err instanceof SurveyApiError) {
-        if (err.originalError && typeof err.originalError === 'object') {
-          const errObj = err.originalError as Record<string, unknown>;
-          let fieldHandled = false;
-
-          for (const [key, val] of Object.entries(errObj)) {
-            if (key === 'project' || key === 'title' || key === 'description' || key === 'start_date' || key === 'end_date') {
-              const msg = Array.isArray(val) ? val.join(' ') : String(val);
-              setError(key as keyof SurveyFormInput, { message: msg });
-              fieldHandled = true;
-            }
-          }
-
-          if (!fieldHandled) {
-            setGeneralError(err.message);
-          }
-        } else {
-          setGeneralError(err.message);
-        }
+        setGeneralError(err.message);
       } else if (err instanceof Error) {
         setGeneralError(err.message);
       } else {
-        setGeneralError('An unexpected error occurred. Please try again.');
+        setGeneralError('An unexpected error occurred while saving the survey.');
       }
     }
   };
 
-  const activeError = generalError || externalSubmitError;
+  const activeError = externalSubmitError || generalError;
 
   return (
-    <form onSubmit={handleSubmit(handleFormSubmit)} className="space-y-8 text-left max-w-4xl">
+    <form
+      onSubmit={handleSubmit(handleFormSubmit, (errs) => scrollToFirstFormError(errs))}
+      className="space-y-8 text-left max-w-4xl"
+      noValidate
+    >
       {activeError && (
         <Alert variant="error" className="animate-shake">
           {activeError}
@@ -238,7 +247,7 @@ export function SurveyForm({
               htmlFor="survey-project-select"
               className="block text-xs font-semibold uppercase tracking-wider text-[#421827]/80"
             >
-              Select Event Project <span className="text-rose-500">*</span>
+              Select Event Project <span className="text-rose-500 font-bold ml-1">*</span>
             </label>
 
             {isLoadingProjects ? (
@@ -250,8 +259,9 @@ export function SurveyForm({
               <div>
                 <select
                   id="survey-project-select"
+                  aria-invalid={Boolean(errors.project)}
                   {...register('project')}
-                  className="w-full rounded-xl border border-stone-200 bg-white px-3.5 py-2.5 text-sm text-[#421827] focus:outline-none focus:border-[#762D46] focus:ring-2 focus:ring-[#762D46]/20 transition-all cursor-pointer"
+                  className={getFieldClass(Boolean(errors.project), 'cursor-pointer')}
                 >
                   <option value="">-- Choose an Event Project --</option>
                   {projects.map((proj) => (
@@ -261,7 +271,7 @@ export function SurveyForm({
                   ))}
                 </select>
                 {errors.project && (
-                  <p className="text-xs text-rose-600 font-medium mt-1">
+                  <p className="text-xs text-rose-600 font-medium mt-1 leading-tight">
                     {errors.project.message}
                   </p>
                 )}
@@ -298,7 +308,8 @@ export function SurveyForm({
 
         {/* Title */}
         <Input
-          label="Survey Title *"
+          label="Survey Title"
+          required
           placeholder="e.g. 2026 Tech Summit Attendee Preferences & Feedback"
           error={errors.title?.message}
           {...register('title')}
@@ -316,11 +327,12 @@ export function SurveyForm({
             id="survey-description"
             rows={4}
             placeholder="Explain the purpose of this survey, expected completion time, or guidelines for respondents..."
-            className="w-full rounded-xl border border-stone-200 bg-white px-3.5 py-2.5 text-sm text-[#421827] placeholder:text-stone-400 focus:outline-none focus:border-[#762D46] focus:ring-2 focus:ring-[#762D46]/20 transition-all resize-y"
+            aria-invalid={Boolean(errors.description)}
+            className={getFieldClass(Boolean(errors.description), 'resize-y')}
             {...register('description')}
           />
           {errors.description && (
-            <p className="text-xs text-rose-600 font-medium">{errors.description.message}</p>
+            <p className="text-xs text-rose-600 font-medium mt-1 leading-tight">{errors.description.message}</p>
           )}
         </div>
 
@@ -337,11 +349,13 @@ export function SurveyForm({
             <input
               id="survey-start-date"
               type="datetime-local"
-              className="w-full rounded-xl border border-stone-200 bg-white px-3.5 py-2.5 text-sm text-[#421827] focus:outline-none focus:border-[#762D46] focus:ring-2 focus:ring-[#762D46]/20 transition-all"
+              min={mode === 'create' ? minDateTime : undefined}
+              aria-invalid={Boolean(errors.start_date)}
+              className={getFieldClass(Boolean(errors.start_date))}
               {...register('start_date')}
             />
             {errors.start_date && (
-              <p className="text-xs text-rose-600 font-medium">{errors.start_date.message}</p>
+              <p className="text-xs text-rose-600 font-medium mt-1 leading-tight">{errors.start_date.message}</p>
             )}
           </div>
 
@@ -356,11 +370,13 @@ export function SurveyForm({
             <input
               id="survey-end-date"
               type="datetime-local"
-              className="w-full rounded-xl border border-stone-200 bg-white px-3.5 py-2.5 text-sm text-[#421827] focus:outline-none focus:border-[#762D46] focus:ring-2 focus:ring-[#762D46]/20 transition-all"
+              min={watch('start_date') || (mode === 'create' ? minDateTime : undefined)}
+              aria-invalid={Boolean(errors.end_date)}
+              className={getFieldClass(Boolean(errors.end_date))}
               {...register('end_date')}
             />
             {errors.end_date && (
-              <p className="text-xs text-rose-600 font-medium">{errors.end_date.message}</p>
+              <p className="text-xs text-rose-600 font-medium mt-1 leading-tight">{errors.end_date.message}</p>
             )}
           </div>
         </div>
@@ -383,10 +399,14 @@ export function SurveyForm({
         {/* Visibility */}
         <div className="space-y-2">
           <label className="block text-xs font-semibold uppercase tracking-wider text-[#421827]/80">
-            Survey Visibility <span className="text-rose-500">*</span>
+            Survey Visibility <span className="text-rose-500 font-bold ml-1">*</span>
           </label>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <label className="flex items-start gap-3 p-3.5 rounded-xl border border-stone-200 hover:border-[#762D46]/40 cursor-pointer bg-white transition-all has-checked:border-[#762D46] has-checked:bg-[#F4E5EA]/30">
+            <label
+              className={`flex items-start gap-3 p-3.5 rounded-xl border cursor-pointer bg-white transition-all has-checked:border-[#762D46] has-checked:bg-[#F4E5EA]/30 ${
+                errors.visibility ? 'border-rose-400 bg-rose-50/10' : 'border-stone-200 hover:border-[#762D46]/40'
+              }`}
+            >
               <input
                 type="radio"
                 value="public"
@@ -404,7 +424,11 @@ export function SurveyForm({
               </div>
             </label>
 
-            <label className="flex items-start gap-3 p-3.5 rounded-xl border border-stone-200 hover:border-[#762D46]/40 cursor-pointer bg-white transition-all has-checked:border-[#762D46] has-checked:bg-[#F4E5EA]/30">
+            <label
+              className={`flex items-start gap-3 p-3.5 rounded-xl border cursor-pointer bg-white transition-all has-checked:border-[#762D46] has-checked:bg-[#F4E5EA]/30 ${
+                errors.visibility ? 'border-rose-400 bg-rose-50/10' : 'border-stone-200 hover:border-[#762D46]/40'
+              }`}
+            >
               <input
                 type="radio"
                 value="private"
@@ -423,52 +447,17 @@ export function SurveyForm({
             </label>
           </div>
           {errors.visibility && (
-            <p className="text-xs text-rose-600 font-medium">{errors.visibility.message}</p>
+            <p className="text-xs text-rose-600 font-medium mt-1 leading-tight">{errors.visibility.message}</p>
           )}
         </div>
 
-        {/* Anonymous Responses */}
-        <div className="pt-2">
-          <label className="flex items-start gap-3 p-3.5 rounded-xl border border-stone-200 hover:border-[#762D46]/40 cursor-pointer bg-white transition-all">
-            <input
-              type="checkbox"
-              {...register('allow_anonymous')}
-              className="mt-0.5 w-4 h-4 rounded text-[#762D46] focus:ring-[#762D46]"
-            />
-            <div>
-              <div className="flex items-center gap-1.5 text-sm font-semibold text-[#30232A]">
-                <UserCheck className="w-4 h-4 text-[#762D46]" />
-                <span>Allow Anonymous Submissions</span>
-              </div>
-              <p className="text-xs text-stone-500 mt-0.5">
-                Participants do not need to sign in to submit responses. Recommended for broad attendee market research.
-              </p>
-            </div>
-          </label>
-        </div>
-
-        {/* Duplicate Submission Rule */}
-        <div className="space-y-2 pt-2">
+        {/* Duplicate Rules */}
+        <div className="space-y-2 pt-2 border-t border-stone-100">
           <label className="block text-xs font-semibold uppercase tracking-wider text-[#421827]/80">
-            Duplicate Response Rule <span className="text-rose-500">*</span>
+            Duplicate Response Prevention
           </label>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-            <label className="flex items-start gap-2.5 p-3 rounded-xl border border-stone-200 hover:border-[#762D46]/40 cursor-pointer bg-white text-xs has-checked:border-[#762D46] has-checked:bg-[#F4E5EA]/30 transition-all">
-              <input
-                type="radio"
-                value="one_per_ip"
-                {...register('duplicate_rule')}
-                className="mt-0.5 text-[#762D46] focus:ring-[#762D46]"
-              />
-              <div>
-                <span className="font-semibold text-[#30232A] block">One per IP</span>
-                <span className="text-stone-500 text-[11px] block mt-0.5">
-                  Enforces 1 response per IP address.
-                </span>
-              </div>
-            </label>
-
-            <label className="flex items-start gap-2.5 p-3 rounded-xl border border-stone-200 hover:border-[#762D46]/40 cursor-pointer bg-white text-xs has-checked:border-[#762D46] has-checked:bg-[#F4E5EA]/30 transition-all">
+            <label className="flex items-start gap-2.5 p-3 rounded-xl border border-stone-200 hover:border-[#762D46]/40 cursor-pointer bg-white transition-all has-checked:border-[#762D46] has-checked:bg-[#F4E5EA]/30">
               <input
                 type="radio"
                 value="one_per_user"
@@ -476,14 +465,25 @@ export function SurveyForm({
                 className="mt-0.5 text-[#762D46] focus:ring-[#762D46]"
               />
               <div>
-                <span className="font-semibold text-[#30232A] block">One per User</span>
-                <span className="text-stone-500 text-[11px] block mt-0.5">
-                  Requires user authentication.
-                </span>
+                <div className="text-xs font-semibold text-[#30232A]">One per User Account</div>
+                <p className="text-[11px] text-stone-500 mt-0.5">Requires respondent sign-in</p>
               </div>
             </label>
 
-            <label className="flex items-start gap-2.5 p-3 rounded-xl border border-stone-200 hover:border-[#762D46]/40 cursor-pointer bg-white text-xs has-checked:border-[#762D46] has-checked:bg-[#F4E5EA]/30 transition-all">
+            <label className="flex items-start gap-2.5 p-3 rounded-xl border border-stone-200 hover:border-[#762D46]/40 cursor-pointer bg-white transition-all has-checked:border-[#762D46] has-checked:bg-[#F4E5EA]/30">
+              <input
+                type="radio"
+                value="one_per_ip"
+                {...register('duplicate_rule')}
+                className="mt-0.5 text-[#762D46] focus:ring-[#762D46]"
+              />
+              <div>
+                <div className="text-xs font-semibold text-[#30232A]">One per IP Address</div>
+                <p className="text-[11px] text-stone-500 mt-0.5">Device & network tracking</p>
+              </div>
+            </label>
+
+            <label className="flex items-start gap-2.5 p-3 rounded-xl border border-stone-200 hover:border-[#762D46]/40 cursor-pointer bg-white transition-all has-checked:border-[#762D46] has-checked:bg-[#F4E5EA]/30">
               <input
                 type="radio"
                 value="allow_multiple"
@@ -491,44 +491,63 @@ export function SurveyForm({
                 className="mt-0.5 text-[#762D46] focus:ring-[#762D46]"
               />
               <div>
-                <span className="font-semibold text-[#30232A] block">Allow Multiple</span>
-                <span className="text-stone-500 text-[11px] block mt-0.5">
-                  Allows multiple repeat submissions.
-                </span>
+                <div className="text-xs font-semibold text-[#30232A]">Allow Multiple</div>
+                <p className="text-[11px] text-stone-500 mt-0.5">Unrestricted submissions</p>
               </div>
             </label>
           </div>
           {errors.duplicate_rule && (
-            <p className="text-xs text-rose-600 font-medium">{errors.duplicate_rule.message}</p>
+            <p className="text-xs text-rose-600 font-medium mt-1 leading-tight">{errors.duplicate_rule.message}</p>
           )}
+        </div>
+
+        {/* Anonymous Toggle */}
+        <div className="flex items-center justify-between p-4 rounded-xl border border-stone-200 bg-stone-50/50">
+          <div className="space-y-0.5 pr-4">
+            <div className="flex items-center gap-2 text-sm font-semibold text-[#30232A]">
+              <UserCheck className="w-4 h-4 text-[#762D46]" />
+              <span>Allow Anonymous Submissions</span>
+            </div>
+            <p className="text-xs text-stone-500 leading-relaxed">
+              When enabled, respondents will not have their usernames or accounts recorded with their answers.
+            </p>
+          </div>
+          <label className="relative inline-flex items-center cursor-pointer shrink-0">
+            <input
+              type="checkbox"
+              className="sr-only peer"
+              {...register('allow_anonymous')}
+            />
+            <div className="w-11 h-6 bg-stone-300 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-[#762D46]/30 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-stone-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-[#762D46]"></div>
+          </label>
         </div>
       </div>
 
-      {/* Action Footer */}
-      <div className="flex items-center justify-between gap-4 pt-4 border-t border-[#E9DDE1]">
+      {/* Form Submission Actions */}
+      <div className="flex items-center justify-between pt-4 border-t border-stone-200">
         <Link
           href={
-            mode === 'edit' && initialData
-              ? `/surveys/${initialData.id}`
-              : lockedProjectId
+            lockedProjectId
               ? `/projects/${lockedProjectId}`
+              : initialData?.id
+              ? `/surveys/${initialData.id}`
               : '/surveys'
           }
-          className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-semibold text-stone-600 hover:text-stone-900 bg-white hover:bg-stone-100 rounded-xl border border-stone-200 transition-colors"
         >
-          <ArrowLeft className="w-4 h-4" />
-          <span>Cancel</span>
+          <Button variant="ghost" type="button" disabled={isSubmitting}>
+            <ArrowLeft className="w-4 h-4 mr-1.5" />
+            <span>Cancel</span>
+          </Button>
         </Link>
 
         <Button
           type="submit"
           variant="primary"
-          size="md"
           isLoading={isSubmitting}
-          className="cursor-pointer"
+          disabled={isSubmitting}
         >
-          <Save className="w-4 h-4" />
-          <span>{mode === 'create' ? 'Create Survey' : 'Save Changes'}</span>
+          <Save className="w-4 h-4 mr-1.5" />
+          <span>{mode === 'create' ? 'Create Survey & Continue' : 'Save Changes'}</span>
         </Button>
       </div>
     </form>

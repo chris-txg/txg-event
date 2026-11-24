@@ -1,4 +1,5 @@
 from typing import Any
+from django.http import HttpResponse
 from django.core.exceptions import ValidationError as DjangoValidationError
 from django.db.models import Prefetch, Q
 from django.shortcuts import get_object_or_404
@@ -72,7 +73,36 @@ class SurveyListCreateView(generics.ListCreateAPIView):
             project_param = self.request.query_params.get("project")
             if project_param:
                 qs = qs.filter(project_id=project_param)
-            return qs
+            status_param = self.request.query_params.get("status")
+            if status_param:
+                if "," in status_param:
+                    statuses = [s.strip() for s in status_param.split(",") if s.strip()]
+                    qs = qs.filter(status__in=statuses)
+                else:
+                    qs = qs.filter(status=status_param)
+            visibility_param = self.request.query_params.get("visibility")
+            if visibility_param:
+                qs = qs.filter(visibility=visibility_param)
+            search_param = self.request.query_params.get("search")
+            if search_param:
+                qs = qs.filter(
+                    Q(title__icontains=search_param) |
+                    Q(description__icontains=search_param) |
+                    Q(project__project_name__icontains=search_param)
+                )
+            from_date_param = self.request.query_params.get("from_date")
+            if from_date_param:
+                qs = qs.filter(
+                    Q(created_at__date__gte=from_date_param) |
+                    Q(start_date__date__gte=from_date_param)
+                )
+            to_date_param = self.request.query_params.get("to_date")
+            if to_date_param:
+                qs = qs.filter(
+                    Q(created_at__date__lte=to_date_param) |
+                    Q(end_date__date__lte=to_date_param)
+                )
+            return qs.order_by("-created_at")
 
         # Default explore listing:
         qs = Survey.objects.select_related("created_by", "project")
@@ -829,3 +859,32 @@ class SurveyAnalyticsView(APIView):
 
         analytics = SurveyService.get_survey_analytics(survey)
         return Response(analytics, status=status.HTTP_200_OK)
+
+
+class SurveyReportDownloadView(APIView):
+    """
+    Directly streams a complete binary PDF executive report for download.
+    """
+
+    permission_classes = [permissions.IsAuthenticated, IsSurveyOwnerOrStaff]
+
+    @extend_schema(
+        tags=["Surveys - Analytics"],
+        summary="Download survey executive report as binary PDF",
+        responses={status.HTTP_200_OK: OpenApiResponse(description="Binary application/pdf stream")},
+    )
+    def get(self, request: Request, id: str) -> HttpResponse:
+        from django.http import HttpResponse
+        from survey.services_pdf import generate_executive_report_pdf
+
+        survey = get_object_or_404(Survey, id=id)
+        self.check_object_permissions(request, survey)
+
+        analytics = SurveyService.get_survey_analytics(survey)
+        pdf_bytes = generate_executive_report_pdf(survey, analytics)
+
+        # Sanitize filename
+        safe_title = "".join(c for c in survey.title if c.isalnum() or c in (" ", "-", "_")).strip() or "Survey_Report"
+        response = HttpResponse(pdf_bytes, content_type="application/pdf")
+        response["Content-Disposition"] = f'attachment; filename="{safe_title}.pdf"'
+        return response

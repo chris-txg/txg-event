@@ -16,7 +16,7 @@ export async function GET(request: NextRequest) {
     // Organiser global view must always include mine=true to see draft and closed surveys
     forwardParams.set('mine', 'true');
 
-    const allowedFilters = ['status', 'project', 'visibility', 'page', 'page_size'];
+    const allowedFilters = ['status', 'project', 'visibility', 'page', 'page_size', 'from_date', 'to_date', 'search'];
     for (const key of allowedFilters) {
       const value = searchParams.get(key);
       if (value) {

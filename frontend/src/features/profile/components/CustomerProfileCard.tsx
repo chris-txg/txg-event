@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { CustomerProfile } from '@/features/authentication/types/auth.types';
 import { Card, CardHeader, CardTitle, CardDescription } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
@@ -9,6 +9,7 @@ import { Alert } from '@/components/ui/Alert';
 import { Building2, FileText, MapPin, Sparkles, CheckCircle2 } from 'lucide-react';
 import { bffFetch } from '@/lib/api/bff-client';
 import { BFF_ENDPOINTS } from '@/config/endpoints';
+import { isValidGSTIN, scrollToFirstFormError } from '@/lib/utils/formValidation';
 
 interface CustomerProfileCardProps {
   profile: CustomerProfile;
@@ -22,26 +23,36 @@ export function CustomerProfileCard({ profile, onProfileUpdated }: CustomerProfi
   const [companyName, setCompanyName] = useState('');
   const [gstNumber, setGstNumber] = useState('');
   const [city, setCity] = useState(profile.city || '');
+  const [fieldErrors, setFieldErrors] = useState<{ companyName?: string; gstNumber?: string }>({});
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const formRef = useRef<HTMLFormElement>(null);
 
   const handleUpgrade = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
     setSuccess(null);
 
+    const errors: { companyName?: string; gstNumber?: string } = {};
+
     if (!companyName.trim()) {
-      setError('Company name is required for corporate accounts.');
+      errors.companyName = 'Company name is required for corporate accounts.';
+    }
+
+    if (!gstNumber.trim()) {
+      errors.gstNumber = 'GSTIN is required for corporate accounts.';
+    } else if (!isValidGSTIN(gstNumber)) {
+      errors.gstNumber = 'Please enter a valid 15-character GSTIN (e.g. 29ABCDE1234F1Z5).';
+    }
+
+    if (Object.keys(errors).length > 0) {
+      setFieldErrors(errors);
+      scrollToFirstFormError(errors, formRef.current);
       return;
     }
 
-    const gstinRegex = /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}$/;
-    if (!gstinRegex.test(gstNumber.trim().toUpperCase())) {
-      setError('Please enter a valid 15-character GSTIN (e.g. 29ABCDE1234F1Z5).');
-      return;
-    }
-
+    setFieldErrors({});
     setLoading(true);
     try {
       const res = await bffFetch(BFF_ENDPOINTS.AUTH.PROFILE_CUSTOMER, {
@@ -161,7 +172,7 @@ export function CustomerProfileCard({ profile, onProfileUpdated }: CustomerProfi
 
         {/* Upgrade Form */}
         {!isB2B && isUpgrading && (
-          <form onSubmit={handleUpgrade} className="space-y-4 p-5 rounded-2xl border border-[#762D46]/30 bg-white shadow-sm">
+          <form ref={formRef} onSubmit={handleUpgrade} className="space-y-4 p-5 rounded-2xl border border-[#762D46]/30 bg-white shadow-sm" noValidate>
             <div className="flex items-center justify-between">
               <h4 className="font-bold text-[#421827] text-sm flex items-center gap-2">
                 <Building2 className="h-4 w-4 text-[#762D46]" />
@@ -178,20 +189,31 @@ export function CustomerProfileCard({ profile, onProfileUpdated }: CustomerProfi
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <Input
+                name="companyName"
                 label="Registered Company Name"
                 placeholder="Acme Global Events Ltd"
                 startIcon={<Building2 className="h-4 w-4" />}
                 value={companyName}
-                onChange={(e) => setCompanyName(e.target.value)}
+                onChange={(e) => {
+                  setCompanyName(e.target.value);
+                  if (fieldErrors.companyName) setFieldErrors((prev) => ({ ...prev, companyName: undefined }));
+                }}
+                error={fieldErrors.companyName}
                 required
               />
               <Input
+                name="gstNumber"
                 label="GSTIN (15 Digits)"
                 placeholder="29ABCDE1234F1Z5"
                 startIcon={<FileText className="h-4 w-4" />}
                 className="uppercase"
                 value={gstNumber}
-                onChange={(e) => setGstNumber(e.target.value)}
+                onChange={(e) => {
+                  setGstNumber(e.target.value.toUpperCase());
+                  if (fieldErrors.gstNumber) setFieldErrors((prev) => ({ ...prev, gstNumber: undefined }));
+                }}
+                error={fieldErrors.gstNumber}
+                helperText="15-character valid GSTIN"
                 required
               />
             </div>

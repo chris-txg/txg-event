@@ -130,6 +130,8 @@ export interface SurveyListItem {
   start_date: string | null;
   end_date: string | null;
   is_paid: boolean;
+  pricing_option?: SurveyPricingOption | null;
+  applied_coupon_code?: string | null;
   created_by_username: string;
   is_active: boolean;
   response_count: number;
@@ -300,6 +302,7 @@ export interface SurveyPricingOption {
 export interface SurveyPublishPayload {
   pricing_option_code?: string;
   pricing_option_id?: string;
+  coupon_code?: string;
 }
 
 /**
@@ -309,6 +312,24 @@ export interface SurveyPublishPayload {
 export interface SurveyPaymentOrderPayload {
   pricing_option_code?: string;
   pricing_option_id?: string;
+  coupon_code?: string;
+}
+
+export interface CouponValidatePayload {
+  coupon_code: string;
+  pricing_option_code?: string;
+  pricing_option_id?: string;
+}
+
+export interface CouponValidateResponse {
+  valid: boolean;
+  coupon_code: string;
+  discount_type: 'PERCENTAGE' | 'FIXED';
+  discount_value: string;
+  original_price: string;
+  discount_amount: string;
+  final_price: string;
+  detail?: string;
 }
 
 /**
@@ -357,6 +378,8 @@ export interface SurveyPaymentOrderResponse {
   survey_title: string;
   pricing_option_code?: string;
   pricing_option_name?: string;
+  coupon_code?: string;
+  discount_amount?: string;
 }
 
 /**

@@ -14,6 +14,7 @@ import { Button } from '@/components/ui/Button';
 import { Alert } from '@/components/ui/Alert';
 import { Card, CardHeader, CardTitle, CardDescription } from '@/components/ui/Card';
 import { Mail, ArrowRight, ArrowLeft } from 'lucide-react';
+import { scrollToFirstFormError } from '@/lib/utils/formValidation';
 
 export function ForgotPasswordForm() {
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
@@ -73,7 +74,11 @@ export function ForgotPasswordForm() {
           </div>
         </div>
       ) : (
-        <form onSubmit={handleSubmit(onSubmit)} className="space-y-4" noValidate>
+        <form
+          onSubmit={handleSubmit(onSubmit, (errs) => scrollToFirstFormError(errs))}
+          className="space-y-4"
+          noValidate
+        >
           {errorMessage && (
             <Alert variant="error" title="Reset Request Failed">
               {errorMessage}
@@ -82,6 +87,7 @@ export function ForgotPasswordForm() {
 
           <Input
             label="Email Address"
+            required
             type="email"
             placeholder="you@example.com"
             autoComplete="email"
@@ -101,12 +107,12 @@ export function ForgotPasswordForm() {
             <ArrowRight className="h-4 w-4 ml-1" />
           </Button>
 
-          <div className="pt-3 text-center">
+          <div className="text-center pt-2">
             <Link
               href="/login"
-              className="inline-flex items-center gap-1.5 text-xs font-semibold text-[#762D46] hover:text-[#A84A63] transition-colors"
+              className="inline-flex items-center text-xs font-semibold text-[#762D46] hover:text-[#A84A63] transition-colors"
             >
-              <ArrowLeft className="h-3 w-3" />
+              <ArrowLeft className="h-3.5 w-3.5 mr-1" />
               <span>Back to Sign In</span>
             </Link>
           </div>

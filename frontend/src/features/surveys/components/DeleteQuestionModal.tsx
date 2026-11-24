@@ -64,9 +64,9 @@ export function DeleteQuestionModal({
       role="dialog"
       aria-modal="true"
       aria-labelledby="delete-question-modal-title"
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 animate-fadeIn"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-3 sm:p-4 overflow-y-auto animate-fadeIn"
     >
-      <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border border-stone-200 relative text-left">
+      <div className="bg-white rounded-2xl max-w-md w-full p-5 sm:p-6 shadow-2xl border border-stone-200 relative text-left my-auto max-h-[95vh] overflow-y-auto">
         <button
           onClick={handleModalClose}
           disabled={deleteMutation.isPending}

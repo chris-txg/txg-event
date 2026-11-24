@@ -3,9 +3,13 @@
 import React from 'react';
 import Link from 'next/link';
 import { useAuth } from '@/features/authentication/context/AuthContext';
-import { LogOut, User as UserIcon, Calendar } from 'lucide-react';
+import { LogOut, User as UserIcon, Calendar, Menu } from 'lucide-react';
 
-export function DashboardHeader() {
+export interface DashboardHeaderProps {
+  onToggleMobileMenu?: () => void;
+}
+
+export function DashboardHeader({ onToggleMobileMenu }: DashboardHeaderProps) {
   const { user, logout } = useAuth();
 
   const getInitials = () => {
@@ -25,13 +29,23 @@ export function DashboardHeader() {
   };
 
   return (
-    <header className="sticky top-0 z-40 bg-[#381421] text-white border-b border-[#5C2337] px-6 py-3 flex items-center justify-between shadow-md">
-      <div className="flex items-center gap-3">
+    <header className="sticky top-0 z-40 bg-[#381421] text-white border-b border-[#5C2337] px-4 sm:px-6 py-3 flex items-center justify-between shadow-md">
+      <div className="flex items-center gap-2 sm:gap-3">
+        {onToggleMobileMenu && (
+          <button
+            type="button"
+            onClick={onToggleMobileMenu}
+            aria-label="Open navigation menu"
+            className="lg:hidden p-2 rounded-lg text-stone-300 hover:text-white hover:bg-[#5C2337]/60 transition-colors cursor-pointer"
+          >
+            <Menu className="w-5 h-5" />
+          </button>
+        )}
         <Link href="/services" className="flex items-center gap-2.5 group">
-          <div className="w-8 h-8 rounded-lg bg-[#762D46] border border-[#A84A63] flex items-center justify-center text-white font-bold text-sm shadow-sm group-hover:bg-[#8D3654] transition-colors">
+          <div className="w-8 h-8 rounded-lg bg-[#762D46] border border-[#A84A63] flex items-center justify-center text-white font-bold text-sm shadow-sm group-hover:bg-[#8D3654] transition-colors shrink-0">
             <Calendar className="w-4 h-4" />
           </div>
-          <span className="font-semibold text-lg tracking-tight text-white">Event Manager</span>
+          <span className="font-semibold text-base sm:text-lg tracking-tight text-white truncate">Event Manager</span>
         </Link>
       </div>
 

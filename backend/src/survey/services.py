@@ -229,9 +229,13 @@ class SurveyService:
             }
 
             if q.question_type in [Question.QuestionType.SINGLE, Question.QuestionType.BOOLEAN]:
+                choice_map = {str(c.id): c.text for c in q.choices.all()}
                 counts: dict[str, int] = {}
                 for val in q_answers:
-                    s_val = str(val)
+                    if q.question_type == Question.QuestionType.BOOLEAN:
+                        s_val = "Yes" if val in [True, "True", "true", 1, "1"] else "No"
+                    else:
+                        s_val = choice_map.get(str(val), str(val))
                     counts[s_val] = counts.get(s_val, 0) + 1
 
                 distribution = []
@@ -244,12 +248,16 @@ class SurveyService:
                 stat_data["distribution"] = distribution
 
             elif q.question_type == Question.QuestionType.MULTIPLE:
+                choice_map = {str(c.id): c.text for c in q.choices.all()}
                 counts: dict[str, int] = {}
                 for val_list in q_answers:
                     if isinstance(val_list, list):
                         for item in val_list:
-                            s_item = str(item)
+                            s_item = choice_map.get(str(item), str(item))
                             counts[s_item] = counts.get(s_item, 0) + 1
+                    else:
+                        s_item = choice_map.get(str(val_list), str(val_list))
+                        counts[s_item] = counts.get(s_item, 0) + 1
 
                 distribution = []
                 for k, count in counts.items():

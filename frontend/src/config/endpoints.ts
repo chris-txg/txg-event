@@ -40,9 +40,11 @@ export const DJANGO_ENDPOINTS = {
     CLOSE: (surveyId: string) => `/api/surveys/${encodeURIComponent(surveyId.trim())}/close/`,
     PAYMENT_ORDER: (surveyId: string) => `/api/surveys/${encodeURIComponent(surveyId.trim())}/payment/order/`,
     PAYMENT_VERIFY: (surveyId: string) => `/api/surveys/${encodeURIComponent(surveyId.trim())}/payment/verify/`,
+    COUPON_VALIDATE: (surveyId: string) => `/api/surveys/${encodeURIComponent(surveyId.trim())}/coupons/validate/`,
     ANALYTICS: (surveyId: string) => `/api/surveys/${encodeURIComponent(surveyId.trim())}/analytics/`,
     RESPONSES: (surveyId: string, queryString?: string) =>
       `/api/surveys/${encodeURIComponent(surveyId.trim())}/responses/${queryString ? `?${queryString}` : ''}`,
+    REPORT_DOWNLOAD: (surveyId: string) => `/api/surveys/${encodeURIComponent(surveyId.trim())}/report/download/`,
     QUESTIONS: (surveyId: string) => `/api/surveys/${encodeURIComponent(surveyId.trim())}/questions/`,
   },
   PUBLIC_SURVEYS: {
@@ -92,9 +94,11 @@ export const BFF_ENDPOINTS = {
     CLOSE: (surveyId: string) => `/api/surveys/${encodeURIComponent(surveyId.trim())}/close`,
     PAYMENT_ORDER: (surveyId: string) => `/api/surveys/${encodeURIComponent(surveyId.trim())}/payment/order`,
     PAYMENT_VERIFY: (surveyId: string) => `/api/surveys/${encodeURIComponent(surveyId.trim())}/payment/verify`,
+    COUPON_VALIDATE: (surveyId: string) => `/api/surveys/${encodeURIComponent(surveyId.trim())}/coupons/validate`,
     ANALYTICS: (surveyId: string) => `/api/surveys/${encodeURIComponent(surveyId.trim())}/analytics`,
     RESPONSES: (surveyId: string, queryString?: string) =>
       `/api/surveys/${encodeURIComponent(surveyId.trim())}/responses${queryString ? `?${queryString}` : ''}`,
+    REPORT_DOWNLOAD: (surveyId: string) => `/api/surveys/${encodeURIComponent(surveyId.trim())}/report/download`,
     QUESTIONS: (surveyId: string) => `/api/surveys/${encodeURIComponent(surveyId.trim())}/questions`,
   },
   PUBLIC_SURVEYS: {
@@ -139,6 +143,7 @@ export const APP_ROUTES = {
   PROJECT_DETAIL: (id: string) => `/projects/${encodeURIComponent(id.trim())}`,
   PROJECT_EDIT: (id: string) => `/projects/${encodeURIComponent(id.trim())}/edit`,
   SURVEYS: '/surveys',
+  ANALYTICS: '/analytics',
   SURVEY_NEW: (projectId?: string) =>
     projectId ? `/surveys/new?project=${encodeURIComponent(projectId.trim())}` : '/surveys/new',
   SURVEY_DETAIL: (id: string) => `/surveys/${encodeURIComponent(id.trim())}`,

@@ -14,7 +14,8 @@ import { handleFormApiErrors } from '@/features/authentication/utils/error-handl
 import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
 import { Alert } from '@/components/ui/Alert';
-import { User, Mail, Lock, Phone, MapPin, Building2, FileText, ArrowRight } from 'lucide-react';
+import { Building2, FileText, User, Mail, Lock, Phone, MapPin, ArrowRight } from 'lucide-react';
+import { scrollToFirstFormError } from '@/lib/utils/formValidation';
 
 export function B2BRegisterForm() {
   const router = useRouter();
@@ -30,13 +31,13 @@ export function B2BRegisterForm() {
     resolver: zodResolver(b2bRegisterSchema),
     defaultValues: {
       customer_type: 'B2B',
+      company_name: '',
+      gst_number: '',
       first_name: '',
       last_name: '',
       username: '',
       email: '',
       phone: '',
-      company_name: '',
-      gst_number: '',
       city: '',
       password: '',
       password_confirm: '',
@@ -46,7 +47,10 @@ export function B2BRegisterForm() {
   const onSubmit = async (data: B2BRegisterFormData) => {
     setGeneralError(null);
     try {
-      const res = await authClientService.registerB2B(data);
+      const res = await authClientService.registerB2B({
+        ...data,
+        gst_number: data.gst_number.toUpperCase(),
+      });
 
       if (!res.ok) {
         handleFormApiErrors<B2BRegisterFormData>(res.error, setError, setGeneralError);
@@ -64,43 +68,56 @@ export function B2BRegisterForm() {
   };
 
   return (
-    <form onSubmit={handleSubmit(onSubmit)} className="space-y-4" noValidate>
+    <form
+      onSubmit={handleSubmit(onSubmit, (errs) => scrollToFirstFormError(errs))}
+      className="space-y-4"
+      noValidate
+    >
       {generalError && (
         <Alert variant="error" title="Registration Failed">
           {generalError}
         </Alert>
       )}
 
-      {/* Corporate profile fields */}
+      {/* Corporate Identity */}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <Input
-          label="Company / Organization Name"
-          placeholder="Acme Events Pvt Ltd"
+          label="Registered Company Name"
+          required
+          placeholder="Acme Global Events Ltd"
           startIcon={<Building2 className="h-4 w-4" />}
           error={errors.company_name?.message}
           {...register('company_name')}
         />
         <Input
           label="GSTIN (15 Digits)"
+          required
           placeholder="29ABCDE1234F1Z5"
-          className="uppercase"
           startIcon={<FileText className="h-4 w-4" />}
-          helperText="Format: 2 digits, 5 letters, 4 digits, 1 letter, 1 alphanumeric, Z, 1 alphanumeric"
+          className="uppercase"
           error={errors.gst_number?.message}
-          {...register('gst_number')}
+          helperText="Format: 2 digits + 10-char PAN + 1 entity + Z + 1 checksum"
+          {...register('gst_number', {
+            onChange: (e) => {
+              e.target.value = e.target.value.toUpperCase();
+            },
+          })}
         />
       </div>
 
+      {/* Contact Person Details */}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <Input
-          label="Authorized Person First Name"
+          label="First Name"
+          required
           placeholder="Jane"
           startIcon={<User className="h-4 w-4" />}
           error={errors.first_name?.message}
           {...register('first_name')}
         />
         <Input
-          label="Authorized Person Last Name"
+          label="Last Name"
+          required
           placeholder="Doe"
           startIcon={<User className="h-4 w-4" />}
           error={errors.last_name?.message}
@@ -111,15 +128,17 @@ export function B2BRegisterForm() {
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <Input
           label="Username"
-          placeholder="acme_corp"
+          required
+          placeholder="janedoe_corp"
           autoComplete="username"
           error={errors.username?.message}
           {...register('username')}
         />
         <Input
-          label="Corporate Email"
+          label="Corporate Email Address"
+          required
           type="email"
-          placeholder="events@acme.com"
+          placeholder="jane@company.com"
           autoComplete="email"
           startIcon={<Mail className="h-4 w-4" />}
           error={errors.email?.message}
@@ -129,7 +148,7 @@ export function B2BRegisterForm() {
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <Input
-          label="Corporate Phone"
+          label="Phone Number"
           type="tel"
           placeholder="+91 98765 43210"
           startIcon={<Phone className="h-4 w-4" />}
@@ -137,8 +156,8 @@ export function B2BRegisterForm() {
           {...register('phone')}
         />
         <Input
-          label="HQ City"
-          placeholder="Mumbai, Bengaluru..."
+          label="Headquarters City"
+          placeholder="Bengaluru"
           startIcon={<MapPin className="h-4 w-4" />}
           error={errors.city?.message}
           {...register('city')}
@@ -148,17 +167,22 @@ export function B2BRegisterForm() {
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <Input
           label="Password"
+          required
           type="password"
           placeholder="••••••••"
+          autoComplete="new-password"
           showPasswordToggle
           startIcon={<Lock className="h-4 w-4" />}
           error={errors.password?.message}
+          helperText="At least 8 characters"
           {...register('password')}
         />
         <Input
           label="Confirm Password"
+          required
           type="password"
           placeholder="••••••••"
+          autoComplete="new-password"
           showPasswordToggle
           startIcon={<Lock className="h-4 w-4" />}
           error={errors.password_confirm?.message}
@@ -173,7 +197,7 @@ export function B2BRegisterForm() {
         className="w-full mt-2"
         isLoading={isSubmitting}
       >
-        <span>Register Corporate Account</span>
+        <span>Create Corporate Account</span>
         <ArrowRight className="h-4 w-4 ml-1" />
       </Button>
     </form>
