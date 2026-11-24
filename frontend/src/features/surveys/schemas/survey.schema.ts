@@ -124,6 +124,9 @@ export const createQuestionSchema = z
       .max(500, 'Question text cannot exceed 500 characters'),
     question_type: z.enum(['text', 'number', 'single', 'multiple', 'boolean', 'date']),
     is_required: z.boolean(),
+    is_rating: z.boolean().optional(),
+    min_rating: z.number().int().optional().nullable(),
+    max_rating: z.number().int().optional().nullable(),
     order: z.number().int('Order must be an integer').min(0, 'Order cannot be negative'),
     choices: z.array(z.string().trim().min(1, 'Choice text cannot be empty')).optional(),
   })
@@ -147,6 +150,18 @@ export const createQuestionSchema = z
         }
       }
     }
+
+    if (data.question_type === 'number' && data.is_rating) {
+      const minR = data.min_rating ?? 1;
+      const maxR = data.max_rating ?? 10;
+      if (minR >= maxR) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: `Minimum rating (${minR}) must be less than maximum rating (${maxR})`,
+          path: ['min_rating'],
+        });
+      }
+    }
   });
 
 export type CreateQuestionFormValues = z.infer<typeof createQuestionSchema>;
@@ -157,15 +172,32 @@ export type CreateQuestionFormValues = z.infer<typeof createQuestionSchema>;
 // Note: question_type is excluded to prevent data corruption.
 // =================================================================
 
-export const updateQuestionSchema = z.object({
-  text: z
-    .string()
-    .trim()
-    .min(2, 'Question text must be at least 2 characters')
-    .max(500, 'Question text cannot exceed 500 characters')
-    .optional(),
-  is_required: z.boolean().optional(),
-  order: z.number().int('Order must be an integer').min(0, 'Order cannot be negative').optional(),
-});
+export const updateQuestionSchema = z
+  .object({
+    text: z
+      .string()
+      .trim()
+      .min(2, 'Question text must be at least 2 characters')
+      .max(500, 'Question text cannot exceed 500 characters')
+      .optional(),
+    is_required: z.boolean().optional(),
+    is_rating: z.boolean().optional(),
+    min_rating: z.number().int().optional().nullable(),
+    max_rating: z.number().int().optional().nullable(),
+    order: z.number().int('Order must be an integer').min(0, 'Order cannot be negative').optional(),
+  })
+  .superRefine((data, ctx) => {
+    if (data.is_rating) {
+      const minR = data.min_rating ?? 1;
+      const maxR = data.max_rating ?? 10;
+      if (minR >= maxR) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: `Minimum rating (${minR}) must be less than maximum rating (${maxR})`,
+          path: ['min_rating'],
+        });
+      }
+    }
+  });
 
 export type UpdateQuestionFormValues = z.infer<typeof updateQuestionSchema>;

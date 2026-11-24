@@ -63,6 +63,9 @@ export interface Question {
   text: string;
   question_type: QuestionType;
   is_required: boolean;
+  is_rating?: boolean;
+  min_rating?: number | null;
+  max_rating?: number | null;
   order: number;
   choices: QuestionChoice[];
   created_at: string;
@@ -78,6 +81,9 @@ export interface CreateQuestionPayload {
   text: string;
   question_type: QuestionType;
   is_required?: boolean;
+  is_rating?: boolean;
+  min_rating?: number | null;
+  max_rating?: number | null;
   order?: number;
   /**
    * Choices are passed as an array of plain strings on question creation.
@@ -95,6 +101,9 @@ export interface CreateQuestionPayload {
 export interface UpdateQuestionPayload {
   text?: string;
   is_required?: boolean;
+  is_rating?: boolean;
+  min_rating?: number | null;
+  max_rating?: number | null;
   order?: number;
 }
 

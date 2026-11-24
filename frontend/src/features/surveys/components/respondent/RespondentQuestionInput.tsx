@@ -52,24 +52,70 @@ export function RespondentQuestionInput({
   // 2. Number / Numeric Rating Input
   if (type === 'number') {
     const numVal = typeof value === 'number' && Number.isFinite(value) ? value : '';
+    const isRating = Boolean(question.is_rating);
+    const minRating = question.min_rating ?? 1;
+    const maxRating = question.max_rating ?? 10;
+    const rangeSpan = maxRating - minRating + 1;
+    const showRatingPills = isRating && rangeSpan >= 2 && rangeSpan <= 15;
+
     return (
-      <div className="w-full max-w-xs">
-        <Input
-          id={inputId}
-          name={inputId}
-          type="number"
-          step="any"
-          value={numVal}
-          disabled={disabled}
-          onChange={(e) => {
-            const raw = e.target.value;
-            onChange(raw === '' ? null : Number(raw));
-          }}
-          placeholder="Enter numeric value..."
-          aria-invalid={Boolean(error)}
-          aria-describedby={error ? errorId : undefined}
-          error={error}
-        />
+      <div className="w-full space-y-3">
+        {showRatingPills && (
+          <div className="space-y-1.5">
+            <div className="flex flex-wrap items-center gap-2">
+              {Array.from({ length: rangeSpan }, (_, idx) => minRating + idx).map((score) => {
+                const isSelected = value === score;
+                return (
+                  <button
+                    key={score}
+                    type="button"
+                    disabled={disabled}
+                    onClick={() => onChange(score)}
+                    className={cn(
+                      'w-10 h-10 rounded-xl font-bold text-xs transition-all duration-150 flex items-center justify-center cursor-pointer border',
+                      isSelected
+                        ? 'bg-[#542037] text-white border-[#542037] shadow-sm scale-105 ring-2 ring-[#542037]/20'
+                        : 'bg-white text-stone-700 border-stone-200 hover:border-[#762D46] hover:bg-[#FAF6F7] hover:text-[#762D46]',
+                      disabled && 'opacity-50 cursor-not-allowed hover:border-stone-200 hover:bg-white'
+                    )}
+                  >
+                    {score}
+                  </button>
+                );
+              })}
+            </div>
+            <div className="flex items-center justify-between text-[11px] font-medium text-stone-400 px-1 pt-0.5 max-w-sm">
+              <span>Lowest ({minRating})</span>
+              <span>Highest ({maxRating})</span>
+            </div>
+          </div>
+        )}
+
+        <div className="w-full max-w-xs">
+          <Input
+            id={inputId}
+            name={inputId}
+            type="number"
+            step="1"
+            min={isRating ? minRating : undefined}
+            max={isRating ? maxRating : undefined}
+            value={numVal}
+            disabled={disabled}
+            onChange={(e) => {
+              const raw = e.target.value;
+              if (raw === '') {
+                onChange(null);
+                return;
+              }
+              const parsed = Number(raw);
+              onChange(Number.isFinite(parsed) ? parsed : null);
+            }}
+            placeholder={isRating ? `Enter rating (${minRating} - ${maxRating})...` : 'Enter numeric value...'}
+            aria-invalid={Boolean(error)}
+            aria-describedby={error ? errorId : undefined}
+            error={error}
+          />
+        </div>
       </div>
     );
   }

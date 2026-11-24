@@ -599,6 +599,115 @@ class QuestionListCreateView(APIView):
         return Response(QuestionSerializer(question).data, status=status.HTTP_201_CREATED)
 
 
+class QuestionExcelTemplateView(APIView):
+    """
+    Downloads an official Excel workbook template (.xlsx) for authoring questions in bulk.
+    """
+    permission_classes = [permissions.IsAuthenticated]
+
+    @extend_schema(
+        tags=["Questions - Management"],
+        summary="Download Excel template for bulk question upload",
+        responses={status.HTTP_200_OK: OpenApiResponse(description="Binary application/vnd.openxmlformats-officedocument.spreadsheetml.sheet stream")},
+    )
+    def get(self, request: Request, id: str) -> HttpResponse:
+        from survey.services_bulk import generate_question_excel_template
+        template_bytes = generate_question_excel_template()
+
+        response = HttpResponse(
+            template_bytes,
+            content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        )
+        response["Content-Disposition"] = 'attachment; filename="Survey_Questions_Template.xlsx"'
+        return response
+
+
+class QuestionBulkUploadView(APIView):
+    """
+    Validates and imports questions from an uploaded Excel (.xlsx) file.
+    Supports dry_run=true query parameter to preview questions and validate format
+    before committing to the database.
+    """
+    permission_classes = [permissions.IsAuthenticated, IsSurveyOwnerOrStaff]
+
+    @extend_schema(
+        tags=["Questions - Management"],
+        summary="Validate or import questions from Excel (.xlsx) file",
+        parameters=[
+            OpenApiParameter(name="dry_run", type=bool, location=OpenApiParameter.QUERY, description="If true, validates without saving to DB"),
+        ],
+        responses={
+            status.HTTP_200_OK: OpenApiResponse(description="Validation or import summary"),
+            status.HTTP_400_BAD_REQUEST: OpenApiResponse(description="Cell or structural validation errors"),
+        },
+    )
+    def post(self, request: Request, id: str) -> Response:
+        from survey.services_bulk import parse_and_validate_questions_excel, create_bulk_questions
+
+        survey = get_object_or_404(Survey, id=id)
+        self.check_object_permissions(request, survey)
+
+        if not survey.can_edit_structure():
+            return Response(
+                {"detail": "Cannot add questions to a survey that already has recorded responses."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        excel_file = request.FILES.get("file")
+        if not excel_file:
+            return Response(
+                {"detail": "No file uploaded. Please upload an Excel (.xlsx) file under the 'file' field."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        filename = excel_file.name.lower()
+        if not (filename.endswith(".xlsx") or filename.endswith(".xls")):
+            return Response(
+                {"detail": "Invalid file extension. Please upload an Excel (.xlsx) file."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        validated_questions, errors = parse_and_validate_questions_excel(excel_file, survey)
+
+        if errors:
+            return Response(
+                {
+                    "success": False,
+                    "errors_count": len(errors),
+                    "errors": errors,
+                    "detail": f"Excel validation failed with {len(errors)} error(s). Please correct the highlighted cells and re-upload.",
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        dry_run = str(request.query_params.get("dry_run", "")).lower() in ("true", "1")
+        if dry_run:
+            return Response(
+                {
+                    "success": True,
+                    "dry_run": True,
+                    "questions_count": len(validated_questions),
+                    "questions": validated_questions,
+                    "message": f"Successfully parsed {len(validated_questions)} questions with zero formatting errors.",
+                },
+                status=status.HTTP_200_OK,
+            )
+
+        # Commit to database
+        created = create_bulk_questions(survey, validated_questions)
+        serializer = QuestionSerializer(created, many=True)
+        return Response(
+            {
+                "success": True,
+                "dry_run": False,
+                "created_count": len(created),
+                "questions": serializer.data,
+                "message": f"Successfully imported {len(created)} questions into '{survey.title}'.",
+            },
+            status=status.HTTP_201_CREATED,
+        )
+
+
 class QuestionDetailView(APIView):
     permission_classes = [permissions.IsAuthenticated, IsSurveyOwnerOrStaff]
 

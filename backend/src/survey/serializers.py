@@ -89,6 +89,9 @@ class QuestionSerializer(serializers.ModelSerializer):
             "text",
             "question_type",
             "is_required",
+            "is_rating",
+            "min_rating",
+            "max_rating",
             "order",
             "choices",
             "created_at",
@@ -112,6 +115,9 @@ class QuestionCreateSerializer(serializers.ModelSerializer):
             "text",
             "question_type",
             "is_required",
+            "is_rating",
+            "min_rating",
+            "max_rating",
             "order",
             "choices",
         ]
@@ -123,6 +129,21 @@ class QuestionCreateSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError(
                 {"choices": f"At least one choice must be provided for {q_type} question type."}
             )
+
+        is_rating = attrs.get("is_rating", False)
+        if q_type == Question.QuestionType.NUMBER and is_rating:
+            min_r = attrs.get("min_rating")
+            max_r = attrs.get("max_rating")
+            if min_r is None:
+                attrs["min_rating"] = 1
+                min_r = 1
+            if max_r is None:
+                attrs["max_rating"] = 10
+                max_r = 10
+            if min_r >= max_r:
+                raise serializers.ValidationError(
+                    {"min_rating": f"Minimum rating ({min_r}) must be less than maximum rating ({max_r})."}
+                )
         return attrs
 
     def create(self, validated_data: dict[str, Any]) -> Question:
@@ -345,6 +366,13 @@ class SurveySubmitSerializer(serializers.Serializer):
         elif q_type == Question.QuestionType.NUMBER:
             if not isinstance(val, (int, float)) or isinstance(val, bool):
                 raise serializers.ValidationError({str(question.id): "Value must be a valid number."})
+            if question.is_rating:
+                min_r = question.min_rating if question.min_rating is not None else 1
+                max_r = question.max_rating if question.max_rating is not None else 10
+                if val < min_r or val > max_r:
+                    raise serializers.ValidationError(
+                        {str(question.id): f"Rating must be between {min_r} and {max_r}."}
+                    )
 
         elif q_type == Question.QuestionType.BOOLEAN:
             if not isinstance(val, bool):

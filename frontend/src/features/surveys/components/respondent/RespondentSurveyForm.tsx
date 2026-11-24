@@ -107,6 +107,12 @@ export function RespondentSurveyForm({
         if (q.question_type === 'number') {
           if (typeof val !== 'number' || !Number.isFinite(val)) {
             newErrors[q.id] = 'Please enter a valid number.';
+          } else if (q.is_rating) {
+            const minR = q.min_rating ?? 1;
+            const maxR = q.max_rating ?? 10;
+            if (val < minR || val > maxR) {
+              newErrors[q.id] = `Rating must be between ${minR} and ${maxR}.`;
+            }
           }
         } else if (q.question_type === 'boolean') {
           if (typeof val !== 'boolean') {

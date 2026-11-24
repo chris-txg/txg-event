@@ -324,4 +324,55 @@ export const surveyClientService = {
       { method: 'GET' }
     );
   },
+
+  /**
+   * Downloads the Excel template (.xlsx) for authoring survey questions.
+   */
+  async downloadQuestionTemplate(surveyId: string): Promise<Blob> {
+    const cleanId = surveyId ? surveyId.trim() : '';
+    const res = await fetch(BFF_ENDPOINTS.SURVEYS.QUESTIONS_TEMPLATE(cleanId));
+    if (!res.ok) {
+      throw new Error('Failed to download questions Excel template.');
+    }
+    return res.blob();
+  },
+
+  /**
+   * Uploads an Excel file to validate or bulk-import questions into the survey.
+   */
+  async uploadQuestionsExcel(
+    surveyId: string,
+    file: File,
+    dryRun = false
+  ): Promise<BffResponse<any>> {
+    const cleanId = surveyId ? surveyId.trim() : '';
+    const formData = new FormData();
+    formData.append('file', file);
+
+    const queryString = dryRun ? '?dry_run=true' : '';
+    const endpoint = `${BFF_ENDPOINTS.SURVEYS.QUESTIONS_BULK_UPLOAD(cleanId)}${queryString}`;
+
+    const res = await fetch(endpoint, {
+      method: 'POST',
+      body: formData,
+    });
+
+    const isJson = res.headers.get('content-type')?.includes('application/json');
+    const data = isJson ? await res.json() : null;
+
+    if (!res.ok) {
+      return {
+        ok: false,
+        status: res.status,
+        data: null,
+        error: data || { detail: 'Bulk upload failed.' },
+      };
+    }
+
+    return {
+      ok: true,
+      status: res.status,
+      data,
+    };
+  },
 };

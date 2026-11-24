@@ -7,12 +7,15 @@ import {
   HelpCircle,
   Lock,
   AlertTriangle,
+  FileSpreadsheet,
 } from 'lucide-react';
 import { SurveyDetail, Question } from '@/features/surveys/types/survey.types';
-import { useSwapQuestions } from '@/features/surveys/hooks/useSurveys';
+import { useSwapQuestions, surveyKeys } from '@/features/surveys/hooks/useSurveys';
+import { useQueryClient } from '@tanstack/react-query';
 import { QuestionCard } from '@/features/surveys/components/QuestionCard';
 import { QuestionModal } from '@/features/surveys/components/QuestionModal';
 import { DeleteQuestionModal } from '@/features/surveys/components/DeleteQuestionModal';
+import { BulkQuestionUploadModal } from '@/features/surveys/components/BulkQuestionUploadModal';
 import { Button } from '@/components/ui/Button';
 import { Alert } from '@/components/ui/Alert';
 
@@ -26,8 +29,11 @@ export function QuestionBuilder({ survey }: QuestionBuilderProps) {
 
   // Modal states
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+  const [isBulkUploadModalOpen, setIsBulkUploadModalOpen] = useState(false);
   const [editingQuestion, setEditingQuestion] = useState<Question | null>(null);
   const [deletingQuestion, setDeletingQuestion] = useState<Question | null>(null);
+
+  const queryClient = useQueryClient();
 
   // Reorder loading state
   const [reorderingQuestionId, setReorderingQuestionId] = useState<string | null>(null);
@@ -97,22 +103,32 @@ export function QuestionBuilder({ survey }: QuestionBuilderProps) {
           </div>
         </div>
 
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2.5">
           {hasResponses ? (
             <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold bg-amber-50 text-amber-800 border border-amber-200">
               <Lock className="w-3.5 h-3.5 text-amber-600" />
               <span>Questions Locked (Responses Recorded)</span>
             </span>
           ) : (
-            <Button
-              type="button"
-              variant="primary"
-              size="sm"
-              onClick={() => setIsCreateModalOpen(true)}
-            >
-              <Plus className="w-4 h-4" />
-              <span>Add Question</span>
-            </Button>
+            <>
+              <button
+                type="button"
+                onClick={() => setIsBulkUploadModalOpen(true)}
+                className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-bold text-[#542037] bg-white hover:bg-[#FAF6F7] border border-[#E9DDE1] rounded-xl shadow-2xs transition-all cursor-pointer"
+              >
+                <FileSpreadsheet className="w-3.5 h-3.5 text-[#762D46]" />
+                <span>Import from Excel</span>
+              </button>
+              <Button
+                type="button"
+                variant="primary"
+                size="sm"
+                onClick={() => setIsCreateModalOpen(true)}
+              >
+                <Plus className="w-4 h-4" />
+                <span>Add Question</span>
+              </Button>
+            </>
           )}
         </div>
       </div>
@@ -204,6 +220,17 @@ export function QuestionBuilder({ survey }: QuestionBuilderProps) {
         onClose={() => setDeletingQuestion(null)}
         surveyId={survey.id}
         question={deletingQuestion}
+      />
+
+      {/* Bulk Excel Upload Modal */}
+      <BulkQuestionUploadModal
+        isOpen={isBulkUploadModalOpen}
+        onClose={() => setIsBulkUploadModalOpen(false)}
+        surveyId={survey.id}
+        surveyTitle={survey.title}
+        onSuccess={() => {
+          queryClient.invalidateQueries({ queryKey: surveyKeys.detail(survey.id) });
+        }}
       />
     </div>
   );

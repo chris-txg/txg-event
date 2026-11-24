@@ -8,6 +8,8 @@ from survey.views import (
     QuestionChoiceDetailView,
     QuestionDetailView,
     QuestionListCreateView,
+    QuestionExcelTemplateView,
+    QuestionBulkUploadView,
     RazorpayWebhookView,
     SurveyAnalyticsView,
     SurveyCloseView,
@@ -48,6 +50,8 @@ urlpatterns = [
     # Question & Choice Management
     # -------------------------------------------------------------
     path("api/surveys/<uuid:id>/questions/", QuestionListCreateView.as_view(), name="survey_questions_create"),
+    path("api/surveys/<uuid:id>/questions/template/", QuestionExcelTemplateView.as_view(), name="survey_questions_template"),
+    path("api/surveys/<uuid:id>/questions/bulk-upload/", QuestionBulkUploadView.as_view(), name="survey_questions_bulk_upload"),
     path("api/questions/<uuid:id>/", QuestionDetailView.as_view(), name="question_detail"),
     path("api/questions/<uuid:id>/choices/", QuestionChoiceCreateView.as_view(), name="question_choice_create"),
     path("api/choices/<uuid:id>/", QuestionChoiceDetailView.as_view(), name="choice_detail"),

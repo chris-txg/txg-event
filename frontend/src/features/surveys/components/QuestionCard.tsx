@@ -40,9 +40,19 @@ export function QuestionCard({
   const isLast = index === totalQuestions - 1;
 
   const renderQuestionTypeBadge = (type: QuestionType) => {
+    if (type === 'number' && question.is_rating) {
+      const minR = question.min_rating ?? 1;
+      const maxR = question.max_rating ?? 10;
+      return (
+        <span className="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-semibold border bg-indigo-50 text-indigo-700 border-indigo-200">
+          Rating ({minR} - {maxR})
+        </span>
+      );
+    }
+
     const labels: Record<QuestionType, { label: string; color: string }> = {
       text: { label: 'Text Prompt', color: 'bg-stone-100 text-stone-700 border-stone-200' },
-      number: { label: 'Number / Rating', color: 'bg-blue-50 text-blue-700 border-blue-200' },
+      number: { label: 'Number (Open)', color: 'bg-blue-50 text-blue-700 border-blue-200' },
       single: { label: 'Single Choice', color: 'bg-emerald-50 text-emerald-700 border-emerald-200' },
       multiple: { label: 'Multiple Choice', color: 'bg-purple-50 text-purple-700 border-purple-200' },
       boolean: { label: 'Yes / No', color: 'bg-amber-50 text-amber-700 border-amber-200' },

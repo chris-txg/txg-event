@@ -270,6 +270,22 @@ class Question(models.Model):
         default=QuestionType.TEXT,
     )
     is_required = models.BooleanField(default=True)
+    is_rating = models.BooleanField(
+        default=False,
+        help_text="If true for number question, restricts input to a numeric rating within min_rating and max_rating.",
+    )
+    min_rating = models.IntegerField(
+        null=True,
+        blank=True,
+        default=1,
+        help_text="Minimum allowed rating score when is_rating is true.",
+    )
+    max_rating = models.IntegerField(
+        null=True,
+        blank=True,
+        default=10,
+        help_text="Maximum allowed rating score when is_rating is true.",
+    )
     order = models.PositiveIntegerField(default=0)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)

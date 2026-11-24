@@ -70,6 +70,9 @@ function QuestionModalContent({
   const [text, setText] = useState(question?.text ?? '');
   const [questionType, setQuestionType] = useState<QuestionType>(question?.question_type ?? 'text');
   const [isRequired, setIsRequired] = useState(question?.is_required ?? true);
+  const [isRating, setIsRating] = useState(question?.is_rating ?? false);
+  const [minRating, setMinRating] = useState<number>(question?.min_rating ?? 1);
+  const [maxRating, setMaxRating] = useState<number>(question?.max_rating ?? 10);
 
   // Choices state for create mode
   const [createChoices, setCreateChoices] = useState<string[]>(['', '']);
@@ -190,6 +193,9 @@ function QuestionModalContent({
         text: text.trim(),
         question_type: questionType,
         is_required: isRequired,
+        is_rating: questionType === 'number' ? isRating : false,
+        min_rating: questionType === 'number' && isRating ? minRating : null,
+        max_rating: questionType === 'number' && isRating ? maxRating : null,
         order: defaultOrder,
         ...(isChoiceType
           ? { choices: createChoices.map((c) => c.trim()).filter((c) => c.length > 0) }
@@ -226,6 +232,9 @@ function QuestionModalContent({
       const payload = {
         text: text.trim(),
         is_required: isRequired,
+        is_rating: question.question_type === 'number' ? isRating : false,
+        min_rating: question.question_type === 'number' && isRating ? minRating : null,
+        max_rating: question.question_type === 'number' && isRating ? maxRating : null,
       };
 
       const result = updateQuestionSchema.safeParse(payload);
@@ -364,6 +373,73 @@ function QuestionModalContent({
               />
             )}
           </div>
+
+          {/* Rating Scale Controls (When questionType is 'number') */}
+          {questionType === 'number' && (
+            <div className="space-y-3 p-4 rounded-xl bg-[#FAF6F7] border border-[#F0E6EA]">
+              <div className="flex items-center gap-3">
+                <input
+                  type="checkbox"
+                  id="is_rating_field"
+                  checked={isRating}
+                  onChange={(e) => setIsRating(e.target.checked)}
+                  disabled={hasResponses || isSaving}
+                  className="w-4 h-4 rounded text-[#762D46] focus:ring-[#762D46] border-stone-300 accent-[#762D46] cursor-pointer disabled:cursor-not-allowed"
+                />
+                <label htmlFor="is_rating_field" className="text-xs font-bold text-[#542037] cursor-pointer select-none">
+                  Constrain as Rating Scale (e.g. 1 to 10)
+                </label>
+              </div>
+
+              {isRating && (
+                <div className="space-y-2.5 pt-2 border-t border-[#F0E6EA]">
+                  <p className="text-[11px] text-[#75666D]">
+                    Specify the allowed rating score range. Respondents will only be able to enter or select values within this range.
+                  </p>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label htmlFor="min_rating_input" className="block text-[11px] font-bold text-[#421827] mb-1">
+                        Minimum Rating <span className="text-rose-500">*</span>
+                      </label>
+                      <input
+                        id="min_rating_input"
+                        type="number"
+                        value={minRating}
+                        onChange={(e) => {
+                          const val = parseInt(e.target.value, 10);
+                          setMinRating(isNaN(val) ? 1 : val);
+                        }}
+                        disabled={hasResponses || isSaving}
+                        className="w-full px-3 py-1.5 text-xs bg-white rounded-lg border border-stone-300 text-stone-800 focus:outline-none focus:ring-1 focus:ring-[#762D46]"
+                      />
+                    </div>
+                    <div>
+                      <label htmlFor="max_rating_input" className="block text-[11px] font-bold text-[#421827] mb-1">
+                        Maximum Rating <span className="text-rose-500">*</span>
+                      </label>
+                      <input
+                        id="max_rating_input"
+                        type="number"
+                        value={maxRating}
+                        onChange={(e) => {
+                          const val = parseInt(e.target.value, 10);
+                          setMaxRating(isNaN(val) ? 10 : val);
+                        }}
+                        disabled={hasResponses || isSaving}
+                        className="w-full px-3 py-1.5 text-xs bg-white rounded-lg border border-stone-300 text-stone-800 focus:outline-none focus:ring-1 focus:ring-[#762D46]"
+                      />
+                    </div>
+                  </div>
+                  {errors.min_rating && (
+                    <p className="text-xs text-rose-600 font-medium">{errors.min_rating}</p>
+                  )}
+                  <p className="text-[11px] text-[#762D46] font-medium">
+                    Preview: Respondents will score this question from {minRating} to {maxRating}.
+                  </p>
+                </div>
+              )}
+            </div>
+          )}
 
           {/* Is Required Checkbox */}
           <div className="flex items-center gap-3 p-3.5 rounded-xl bg-stone-50 border border-stone-200/80">

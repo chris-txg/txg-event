@@ -46,6 +46,9 @@ export const DJANGO_ENDPOINTS = {
       `/api/surveys/${encodeURIComponent(surveyId.trim())}/responses/${queryString ? `?${queryString}` : ''}`,
     REPORT_DOWNLOAD: (surveyId: string) => `/api/surveys/${encodeURIComponent(surveyId.trim())}/report/download/`,
     QUESTIONS: (surveyId: string) => `/api/surveys/${encodeURIComponent(surveyId.trim())}/questions/`,
+    QUESTIONS_TEMPLATE: (surveyId: string) => `/api/surveys/${encodeURIComponent(surveyId.trim())}/questions/template/`,
+    QUESTIONS_BULK_UPLOAD: (surveyId: string, queryString?: string) =>
+      `/api/surveys/${encodeURIComponent(surveyId.trim())}/questions/bulk-upload/${queryString ? `?${queryString}` : ''}`,
   },
   PUBLIC_SURVEYS: {
     DETAIL: (surveyId: string) => `/api/public/surveys/${encodeURIComponent(surveyId.trim())}/`,
@@ -100,6 +103,9 @@ export const BFF_ENDPOINTS = {
       `/api/surveys/${encodeURIComponent(surveyId.trim())}/responses${queryString ? `?${queryString}` : ''}`,
     REPORT_DOWNLOAD: (surveyId: string) => `/api/surveys/${encodeURIComponent(surveyId.trim())}/report/download`,
     QUESTIONS: (surveyId: string) => `/api/surveys/${encodeURIComponent(surveyId.trim())}/questions`,
+    QUESTIONS_TEMPLATE: (surveyId: string) => `/api/surveys/${encodeURIComponent(surveyId.trim())}/questions/template`,
+    QUESTIONS_BULK_UPLOAD: (surveyId: string, queryString?: string) =>
+      `/api/surveys/${encodeURIComponent(surveyId.trim())}/questions/bulk-upload${queryString ? `?${queryString}` : ''}`,
   },
   PUBLIC_SURVEYS: {
     DETAIL: (surveyId: string) => `/api/public/surveys/${encodeURIComponent(surveyId.trim())}`,
