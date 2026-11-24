@@ -117,38 +117,23 @@ function ReportsPageContent() {
   if (selectedSurveyId) {
     return (
       <div className="space-y-6 animate-fadeIn text-left">
-        {/* Navigation Breadcrumb (Hidden in Print) */}
+        {/* Top Actions Bar (Hidden in Print) */}
         <div className="no-print flex items-center justify-between text-xs text-stone-500">
-          <div className="flex items-center gap-2">
-            <button
-              onClick={handleBackToList}
-              className="hover:text-[#762D46] transition-colors cursor-pointer flex items-center gap-1 font-medium"
-            >
-              <FileText className="w-3.5 h-3.5 text-[#762D46]" />
-              <span>Executive Reports</span>
-            </button>
-            <span>/</span>
-            <span className="text-stone-800 font-semibold truncate max-w-xs">
-              {selectedSurveyDetail?.title || 'Report View'}
-            </span>
-          </div>
+          <button
+            onClick={handleBackToList}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white border border-[#E9DDE1] text-xs font-semibold text-[#762D46] hover:bg-[#FAF5F7] transition-colors shadow-xs cursor-pointer"
+          >
+            <ArrowLeft className="w-3.5 h-3.5" />
+            <span>Back to Reports</span>
+          </button>
 
-          <div className="flex items-center gap-2">
-            <button
-              onClick={handleBackToList}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white border border-[#E9DDE1] text-xs font-semibold text-[#762D46] hover:bg-[#FAF5F7] transition-colors shadow-xs cursor-pointer"
-            >
-              <ArrowLeft className="w-3.5 h-3.5" />
-              <span>Back to Reports</span>
-            </button>
-            <Link
-              href={`/analytics?surveyId=${selectedSurveyId}`}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white border border-[#E9DDE1] text-xs font-semibold text-stone-600 hover:text-stone-900 hover:bg-[#FAF5F7] transition-colors shadow-xs"
-            >
-              <BarChart3 className="w-3.5 h-3.5 text-[#762D46]" />
-              <span>Open in Analytics</span>
-            </Link>
-          </div>
+          <Link
+            href={`/analytics?surveyId=${selectedSurveyId}`}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white border border-[#E9DDE1] text-xs font-semibold text-stone-600 hover:text-stone-900 hover:bg-[#FAF5F7] transition-colors shadow-xs"
+          >
+            <BarChart3 className="w-3.5 h-3.5 text-[#762D46]" />
+            <span>Open in Analytics</span>
+          </Link>
         </div>
 
         {/* Executive Report Content */}
