@@ -257,7 +257,8 @@ class AuthService:
 
         with transaction.atomic():
             user.set_password(new_password)
-            user.save(update_fields=["password"])
+            user.password_updated = True
+            user.save(update_fields=["password", "password_updated"])
             record_audit_log(
                 action=AuditAction.PASSWORD_CHANGE,
                 actor=user,
@@ -317,7 +318,8 @@ class AuthService:
 
         with transaction.atomic():
             user.set_password(new_password)
-            user.save(update_fields=["password"])
+            user.password_updated = True
+            user.save(update_fields=["password", "password_updated"])
             record_audit_log(
                 action=AuditAction.PASSWORD_RESET_CONFIRM,
                 actor=user,

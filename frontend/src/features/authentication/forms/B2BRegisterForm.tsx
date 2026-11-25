@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
-import { useForm } from 'react-hook-form';
+import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useRouter } from 'next/navigation';
 import {
@@ -12,9 +12,10 @@ import { authClientService } from '@/features/authentication/services/authClient
 import { useAuth } from '@/features/authentication/context/AuthContext';
 import { handleFormApiErrors } from '@/features/authentication/utils/error-handler';
 import { Input } from '@/components/ui/Input';
+import { PhoneInput } from '@/components/ui/PhoneInput';
 import { Button } from '@/components/ui/Button';
 import { Alert } from '@/components/ui/Alert';
-import { Building2, FileText, User, Mail, Lock, Phone, MapPin, ArrowRight } from 'lucide-react';
+import { Building2, FileText, User, Mail, Lock, MapPin, ArrowRight } from 'lucide-react';
 import { scrollToFirstFormError } from '@/lib/utils/formValidation';
 
 export function B2BRegisterForm() {
@@ -24,6 +25,7 @@ export function B2BRegisterForm() {
 
   const {
     register,
+    control,
     handleSubmit,
     setError,
     formState: { errors, isSubmitting },
@@ -147,13 +149,18 @@ export function B2BRegisterForm() {
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-        <Input
-          label="Phone Number"
-          type="tel"
-          placeholder="+91 98765 43210"
-          startIcon={<Phone className="h-4 w-4" />}
-          error={errors.phone?.message}
-          {...register('phone')}
+        <Controller
+          name="phone"
+          control={control}
+          render={({ field }) => (
+            <PhoneInput
+              label="Phone Number"
+              value={field.value}
+              onChange={field.onChange}
+              onBlur={field.onBlur}
+              error={errors.phone?.message}
+            />
+          )}
         />
         <Input
           label="Headquarters City"

@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import {
@@ -8,6 +9,8 @@ import {
   ChangePasswordFormData,
 } from '@/features/authentication/schemas/password.schema';
 import { authClientService } from '@/features/authentication/services/authClientService';
+import { useAuth } from '@/features/authentication/context/AuthContext';
+import { APP_ROUTES } from '@/config/endpoints';
 import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
 import { Alert } from '@/components/ui/Alert';
@@ -16,6 +19,8 @@ import { Lock } from 'lucide-react';
 import { scrollToFirstFormError } from '@/lib/utils/formValidation';
 
 export function ChangePasswordForm() {
+  const router = useRouter();
+  const { refreshSession } = useAuth();
   const [success, setSuccess] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -53,8 +58,11 @@ export function ChangePasswordForm() {
         return;
       }
 
-      setSuccess('Your password has been changed successfully.');
+      setSuccess('Your password has been changed successfully. Redirecting...');
       reset();
+      await refreshSession();
+      router.push(APP_ROUTES.SERVICES);
+      router.refresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Network error. Please try again.');
     }

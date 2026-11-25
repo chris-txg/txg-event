@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { validateCountryPhone } from '@/lib/utils/phoneValidation';
 import { getTodayDateString } from '@/lib/utils/formValidation';
 
 export const projectFormSchema = z
@@ -22,10 +23,16 @@ export const projectFormSchema = z
       .trim()
       .max(25)
       .optional()
-      .refine(
-        (val) => !val || /^[+]?[(]?[0-9]{1,4}[)]?[-\s./0-9]{7,18}$/.test(val),
-        { message: 'Please enter a valid contact phone number (digits and optional +/spaces)' }
-      ),
+      .superRefine((val, ctx) => {
+        if (!val) return;
+        const result = validateCountryPhone(val);
+        if (!result.valid) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            message: result.message || 'Please enter a valid contact phone number',
+          });
+        }
+      }),
     organiser_country: z.string().trim().max(100).optional(),
     organiser_region: z.string().trim().max(100).optional(),
     event_country: z.string().trim().max(100).optional(),

@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { validateCountryPhone } from '@/lib/utils/phoneValidation';
 
 export const GSTIN_REGEX = /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}$/;
 
@@ -29,8 +30,15 @@ const baseUserFields = {
     .string()
     .trim()
     .optional()
-    .refine((val) => !val || /^[+]?[(]?[0-9]{1,4}[)]?[-\s./0-9]{7,15}$/.test(val), {
-      message: 'Please enter a valid phone number (digits and optional +/spaces)',
+    .superRefine((val, ctx) => {
+      if (!val) return;
+      const result = validateCountryPhone(val);
+      if (!result.valid) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: result.message || 'Please enter a valid phone number',
+        });
+      }
     }),
   password: z
     .string()

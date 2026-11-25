@@ -117,6 +117,7 @@ class UserSummarySerializer(serializers.ModelSerializer):
             "role",
             "avatar",
             "is_verified",
+            "password_updated",
         ]
         read_only_fields = fields
 
@@ -140,13 +141,14 @@ class UserProfileSerializer(serializers.ModelSerializer):
             "avatar",
             "phone_number",
             "is_verified",
+            "password_updated",
             "notes",
             "customer_profile",
             "vendor_profile",
             "created_at",
             "updated_at",
         ]
-        read_only_fields = ["id", "username", "email", "user_type", "role", "is_verified", "created_at", "updated_at"]
+        read_only_fields = ["id", "username", "email", "user_type", "role", "is_verified", "password_updated", "created_at", "updated_at"]
 
     def validate_avatar(self, value: Any) -> Any:
         if value:

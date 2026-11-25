@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { validateCountryPhone } from '@/lib/utils/phoneValidation';
 
 export const VENDOR_CATEGORIES = [
   { value: 'VENUE', label: 'Venue & Banquet' },
@@ -52,8 +53,15 @@ export const vendorRegisterSchema = z
       .string()
       .trim()
       .optional()
-      .refine((val) => !val || /^[+]?[(]?[0-9]{1,4}[)]?[-\s./0-9]{7,15}$/.test(val), {
-        message: 'Please enter a valid phone number',
+      .superRefine((val, ctx) => {
+        if (!val) return;
+        const result = validateCountryPhone(val);
+        if (!result.valid) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            message: result.message || 'Please enter a valid phone number',
+          });
+        }
       }),
     business_name: z
       .string()

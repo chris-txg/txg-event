@@ -49,6 +49,7 @@ export interface User {
   user_type: UserRole;
   phone?: string | null;
   is_verified: boolean;
+  password_updated?: boolean;
   customer_profile?: CustomerProfile | null;
   vendor_profile?: VendorProfile | null;
   created_at?: string;

@@ -19,6 +19,8 @@ load_dotenv(BASE_DIR.parent / '.env')
 SECRET_KEY = os.environ.get('DJANGO_SECRET_KEY', 'django-insecure-!ok$in#vktuimx*2(2b53a+#9nh2dlg(n*9pz#j#a*5+ux-a-$')
 DEBUG = os.environ.get('DJANGO_DEBUG', 'True') == 'True'
 
+FORCE_SCRIPT_NAME = os.environ.get('DJANGO_FORCE_SCRIPT_NAME') or None
+
 ALLOWED_HOSTS = ['*'] if DEBUG else os.environ.get('DJANGO_ALLOWED_HOSTS', '').split(',')
 
 # Application definition
@@ -125,7 +127,7 @@ USE_I18N = True
 USE_TZ = True
 
 # Static files
-STATIC_URL = 'static/'
+STATIC_URL = os.environ.get('DJANGO_STATIC_URL', 'static/')
 STATIC_ROOT = BASE_DIR / 'staticfiles'
 
 # Media files (User uploads, avatars, assets)

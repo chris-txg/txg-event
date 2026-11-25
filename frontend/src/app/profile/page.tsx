@@ -9,8 +9,7 @@ import { VendorProfileCard } from '@/features/profile/components/VendorProfileCa
 import { ChangePasswordForm } from '@/features/profile/components/ChangePasswordForm';
 import { Spinner } from '@/components/ui/Spinner';
 import { Button } from '@/components/ui/Button';
-import { ArrowLeft, User as UserIcon } from 'lucide-react';
-import { APP_ROUTES } from '@/config/endpoints';
+import { User as UserIcon } from 'lucide-react';
 
 export default function ProfilePage() {
   const { user, isLoading, logout, refreshSession } = useAuth();
@@ -60,15 +59,8 @@ export default function ProfilePage() {
   return (
     <div className="min-h-screen bg-[#FBF7F8] py-8 sm:py-12 px-4 sm:px-6">
       <div className="max-w-4xl mx-auto space-y-6">
-        {/* Top bar with back to services */}
-        <div className="flex items-center justify-between">
-          <Link
-            href={APP_ROUTES.SERVICES}
-            className="inline-flex items-center gap-2 text-xs font-bold text-[#762D46] hover:text-[#A84A63] transition-colors group"
-          >
-            <ArrowLeft className="h-3.5 w-3.5 transition-transform group-hover:-translate-x-0.5" />
-            <span>Back to Services</span>
-          </Link>
+        {/* Top bar */}
+        <div className="flex items-center justify-end">
           <span className="text-xs text-stone-400 font-mono">
             ID: {user.id.slice(0, 8)}...
           </span>

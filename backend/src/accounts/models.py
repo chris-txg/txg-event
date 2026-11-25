@@ -75,6 +75,7 @@ class User(AbstractUser):
         help_text="User profile picture (stored temporarily on upload, converted to WebP via Celery)",
     )
     is_verified = models.BooleanField(default=False, db_index=True)
+    password_updated = models.BooleanField(default=False, db_index=True)
     notes = models.TextField(blank=True, null=True)
     created_at = models.DateTimeField(default=timezone.now, db_index=True)
     updated_at = models.DateTimeField(auto_now=True)

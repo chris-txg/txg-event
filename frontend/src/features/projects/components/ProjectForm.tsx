@@ -2,7 +2,7 @@
 
 import React, { useState } from 'react';
 import Link from 'next/link';
-import { useForm } from 'react-hook-form';
+import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import {
   projectFormSchema,
@@ -30,7 +30,8 @@ import {
   Download,
 } from 'lucide-react';
 import { Spinner } from '@/components/ui/Spinner';
-import { scrollToFirstFormError, preventNonNumericInput, preventNonPhoneInput, getTodayDateString } from '@/lib/utils/formValidation';
+import { PhoneInput } from '@/components/ui/PhoneInput';
+import { scrollToFirstFormError, preventNonNumericInput, getTodayDateString } from '@/lib/utils/formValidation';
 import { getFieldClass } from '@/lib/utils/formStyles';
 
 export interface ProjectFormProps {
@@ -94,6 +95,7 @@ export function ProjectForm({
 
   const {
     register,
+    control,
     handleSubmit,
     setValue,
     getValues,
@@ -522,20 +524,19 @@ export function ProjectForm({
             </div>
 
             <div className="space-y-1.5">
-              <label className="text-xs font-semibold text-[#30232A]">
-                Contact Number <span className="text-stone-400 font-normal">(Optional)</span>
-              </label>
-              <input
-                type="tel"
-                placeholder="+1 (555) 000-0000"
-                aria-invalid={Boolean(errors.contact_number)}
-                onKeyDown={preventNonPhoneInput}
-                {...register('contact_number')}
-                className={getFieldClass(Boolean(errors.contact_number), 'text-xs sm:text-sm')}
+              <Controller
+                name="contact_number"
+                control={control}
+                render={({ field }) => (
+                  <PhoneInput
+                    label="Contact Number (Optional)"
+                    value={field.value}
+                    onChange={field.onChange}
+                    onBlur={field.onBlur}
+                    error={errors.contact_number?.message}
+                  />
+                )}
               />
-              {errors.contact_number && (
-                <p className="text-xs text-rose-600 font-medium mt-1 leading-tight">{errors.contact_number.message}</p>
-              )}
             </div>
 
             <div className="space-y-1.5">

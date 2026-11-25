@@ -53,6 +53,15 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(
       }
     };
 
+    const passwordClipboardProps = isPasswordType
+      ? {
+          onCopy: (e: React.ClipboardEvent<HTMLInputElement>) => e.preventDefault(),
+          onCut: (e: React.ClipboardEvent<HTMLInputElement>) => e.preventDefault(),
+          onPaste: (e: React.ClipboardEvent<HTMLInputElement>) => e.preventDefault(),
+          onDrop: (e: React.DragEvent<HTMLInputElement>) => e.preventDefault(),
+        }
+      : {};
+
     return (
       <div className="w-full space-y-1.5 text-left">
         {cleanLabel && (
@@ -80,6 +89,7 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(
             type={computedType}
             aria-invalid={Boolean(error)}
             onKeyDown={handleKeyDown}
+            {...passwordClipboardProps}
             className={cn(
               'w-full rounded-xl border bg-white px-3.5 py-2.5 text-sm text-[#421827] placeholder:text-stone-400 transition-all duration-200 focus:outline-none disabled:bg-stone-50 disabled:cursor-not-allowed',
               startIcon && 'pl-10',

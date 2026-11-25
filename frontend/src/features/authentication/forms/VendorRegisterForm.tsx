@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
-import { useForm } from 'react-hook-form';
+import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useRouter } from 'next/navigation';
 import {
@@ -13,11 +13,12 @@ import { authClientService } from '@/features/authentication/services/authClient
 import { useAuth } from '@/features/authentication/context/AuthContext';
 import { handleFormApiErrors } from '@/features/authentication/utils/error-handler';
 import { Input } from '@/components/ui/Input';
+import { PhoneInput } from '@/components/ui/PhoneInput';
 import { Select } from '@/components/ui/Select';
 import { Button } from '@/components/ui/Button';
 import { Alert } from '@/components/ui/Alert';
 import { Card, CardHeader, CardTitle, CardDescription } from '@/components/ui/Card';
-import { Store, User, Mail, Lock, Phone, MapPin, ArrowRight } from 'lucide-react';
+import { Store, User, Mail, Lock, MapPin, ArrowRight } from 'lucide-react';
 import { scrollToFirstFormError } from '@/lib/utils/formValidation';
 
 export function VendorRegisterForm() {
@@ -27,6 +28,7 @@ export function VendorRegisterForm() {
 
   const {
     register,
+    control,
     handleSubmit,
     setError,
     formState: { errors, isSubmitting },
@@ -114,13 +116,18 @@ export function VendorRegisterForm() {
             error={errors.city?.message}
             {...register('city')}
           />
-          <Input
-            label="Contact Phone"
-            type="tel"
-            placeholder="+91 98765 43210"
-            startIcon={<Phone className="h-4 w-4" />}
-            error={errors.phone?.message}
-            {...register('phone')}
+          <Controller
+            name="phone"
+            control={control}
+            render={({ field }) => (
+              <PhoneInput
+                label="Contact Phone"
+                value={field.value}
+                onChange={field.onChange}
+                onBlur={field.onBlur}
+                error={errors.phone?.message}
+              />
+            )}
           />
         </div>
 

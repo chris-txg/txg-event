@@ -56,7 +56,9 @@ export function LoginForm() {
 
       if (res.data?.user) {
         setUser(res.data.user);
-        router.push(redirectPath);
+        const targetPath =
+          res.data.user.password_updated === false ? '/profile' : redirectPath;
+        router.push(targetPath);
         router.refresh();
       }
     } catch (err) {
