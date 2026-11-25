@@ -257,9 +257,15 @@ class SurveyPublishView(APIView):
 
         pricing_option = None
         if opt_id:
-            pricing_option = get_object_or_404(SurveyPricingOption, id=opt_id)
+            if survey.is_paid:
+                pricing_option = SurveyPricingOption.objects.filter(id=opt_id).first() or survey.pricing_option
+            else:
+                pricing_option = get_object_or_404(SurveyPricingOption, id=opt_id)
         elif opt_code:
-            pricing_option = get_object_or_404(SurveyPricingOption, code=opt_code)
+            if survey.is_paid:
+                pricing_option = SurveyPricingOption.objects.filter(code=opt_code).first() or survey.pricing_option
+            else:
+                pricing_option = get_object_or_404(SurveyPricingOption, code=opt_code)
         elif not survey.is_paid:
             # Check if there is an active free plan available
             pricing_option = SurveyPricingOption.objects.filter(is_active=True, is_free=True).first()
@@ -390,7 +396,7 @@ class SurveyCreatePaymentOrderView(APIView):
             "key_id": key_id,
             "survey_id": survey.id,
             "survey_title": survey.title,
-            "pricing_option_code": pricing_option.code if pricing_option else "standard",
+            "pricing_option_code": pricing_option.code if pricing_option else None,
             "pricing_option_name": pricing_option.name if pricing_option else "Standard Plan",
             "coupon_code": payment.coupon.code if payment.coupon else None,
             "discount_amount": discount_amount,

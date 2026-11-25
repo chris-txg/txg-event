@@ -1,4 +1,4 @@
-import { bffFetch, BffResponse } from '@/lib/api/bff-client';
+import { bffFetch, BffResponse, resolveBffUrl } from '@/lib/api/bff-client';
 import { BFF_ENDPOINTS } from '@/config/endpoints';
 import {
   SurveyListItem,
@@ -330,7 +330,7 @@ export const surveyClientService = {
    */
   async downloadQuestionTemplate(surveyId: string): Promise<Blob> {
     const cleanId = surveyId ? surveyId.trim() : '';
-    const res = await fetch(BFF_ENDPOINTS.SURVEYS.QUESTIONS_TEMPLATE(cleanId));
+    const res = await fetch(resolveBffUrl(BFF_ENDPOINTS.SURVEYS.QUESTIONS_TEMPLATE(cleanId)));
     if (!res.ok) {
       throw new Error('Failed to download questions Excel template.');
     }
@@ -352,7 +352,7 @@ export const surveyClientService = {
     const queryString = dryRun ? '?dry_run=true' : '';
     const endpoint = `${BFF_ENDPOINTS.SURVEYS.QUESTIONS_BULK_UPLOAD(cleanId)}${queryString}`;
 
-    const res = await fetch(endpoint, {
+    const res = await fetch(resolveBffUrl(endpoint), {
       method: 'POST',
       body: formData,
     });

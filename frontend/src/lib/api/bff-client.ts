@@ -9,7 +9,7 @@ const BASE_PATH = process.env.NEXT_PUBLIC_BASE_PATH !== undefined
   ? process.env.NEXT_PUBLIC_BASE_PATH
   : '/txgevent';
 
-function resolveBffUrl(endpoint: string): string {
+export function resolveBffUrl(endpoint: string): string {
   if (endpoint.startsWith('http://') || endpoint.startsWith('https://')) {
     return endpoint;
   }
