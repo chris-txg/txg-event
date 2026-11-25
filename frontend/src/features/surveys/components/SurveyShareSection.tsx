@@ -15,6 +15,7 @@ import {
 import { Button } from '@/components/ui/Button';
 import { SurveyDetail } from '@/features/surveys/types/survey.types';
 import { APP_ROUTES } from '@/config/endpoints';
+import { resolveBffUrl } from '@/lib/api/bff-client';
 
 export interface SurveyShareSectionProps {
   survey: SurveyDetail;
@@ -30,7 +31,7 @@ export function SurveyShareSection({ survey }: SurveyShareSectionProps) {
   const [isCopied, setIsCopied] = useState(false);
   const [copyError, setCopyError] = useState<string | null>(null);
 
-  const respondentPath = APP_ROUTES.RESPONDENT_SURVEY(survey.id);
+  const respondentPath = resolveBffUrl(APP_ROUTES.RESPONDENT_SURVEY(survey.id));
   const shareUrl = origin ? `${origin}${respondentPath}` : respondentPath;
 
   const isDraft = survey.status === 'draft';
@@ -61,7 +62,7 @@ export function SurveyShareSection({ survey }: SurveyShareSectionProps) {
   };
 
   const handleOpenPreview = () => {
-    window.open(`/s/${survey.id}`, '_blank', 'noopener,noreferrer');
+    window.open(respondentPath, '_blank', 'noopener,noreferrer');
   };
 
   return (
