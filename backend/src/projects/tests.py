@@ -8,7 +8,8 @@ from django.urls import reverse
 from rest_framework import status
 from rest_framework.test import APITestCase
 
-from projects.models import EventProject, EventProjectDocument
+from accounts.models import VendorCategory, VendorProfile
+from projects.models import EventProject, EventProjectDocument, EventVendor
 from survey.models import Survey
 
 User = get_user_model()
@@ -144,4 +145,177 @@ class EventProjectTests(APITestCase):
         detail_url = reverse("project_detail", kwargs={"id": project.id})
         self.assertEqual(self.client.get(detail_url).status_code, status.HTTP_403_FORBIDDEN)
         self.assertEqual(self.client.get(surveys_url).status_code, status.HTTP_403_FORBIDDEN)
+
+
+class EventVendorTests(APITestCase):
+    def setUp(self) -> None:
+        self.organizer = User.objects.create_user(
+            username="organizer_test",
+            email="organizer@example.com",
+            password="StrongPassword123!",
+        )
+        self.other_user = User.objects.create_user(
+            username="other_organizer",
+            email="other@example.com",
+            password="StrongPassword123!",
+        )
+        self.vendor_user1 = User.objects.create_user(
+            username="vendor_caterer",
+            email="caterer@example.com",
+            password="StrongPassword123!",
+        )
+        self.vendor1 = VendorProfile.objects.create(
+            user=self.vendor_user1,
+            business_name="Delight Catering",
+            business_category=VendorCategory.CATERING,
+            city="Chennai",
+            years_in_business=6,
+        )
+        self.vendor_user2 = User.objects.create_user(
+            username="vendor_photographer",
+            email="photographer@example.com",
+            password="StrongPassword123!",
+        )
+        self.vendor2 = VendorProfile.objects.create(
+            user=self.vendor_user2,
+            business_name="Pixel Studio",
+            business_category=VendorCategory.PHOTOGRAPHY,
+            city="Bengaluru",
+            years_in_business=3,
+        )
+        self.project = EventProject.objects.create(
+            owner=self.organizer,
+            project_name="Mega Music Festival",
+            estimated_budget_range="500000-1000000",
+        )
+        self.client.force_authenticate(user=self.organizer)
+        self.vendors_url = reverse("project_vendors", kwargs={"id": self.project.id})
+
+    def test_add_and_list_event_vendors(self) -> None:
+        # 1. Add Delight Catering
+        res1 = self.client.post(
+            self.vendors_url,
+            {
+                "vendor_id": str(self.vendor1.id),
+                "service_type": "CATERING",
+                "status": "CONFIRMED",
+                "agreed_budget": 150000.00,
+                "notes": "Includes 3-course dinner and beverages",
+            },
+            format="json",
+        )
+        self.assertEqual(res1.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(res1.data["vendor_name"], "Delight Catering")
+        self.assertEqual(res1.data["service_type"], "CATERING")
+        self.assertEqual(res1.data["status"], "CONFIRMED")
+
+        # 2. Add Pixel Studio
+        res2 = self.client.post(
+            self.vendors_url,
+            {
+                "vendor_id": str(self.vendor2.id),
+                "status": "SHORTLISTED",
+            },
+            format="json",
+        )
+        self.assertEqual(res2.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(res2.data["service_type"], "PHOTOGRAPHY")
+
+        # 3. List vendors
+        list_res = self.client.get(self.vendors_url)
+        self.assertEqual(list_res.status_code, status.HTTP_200_OK)
+        self.assertEqual(list_res.data["count"], 2)
+
+    def test_filter_event_vendors_by_query_params(self) -> None:
+        EventVendor.objects.create(
+            project=self.project,
+            vendor=self.vendor1,
+            service_type="CATERING",
+            status=EventVendor.BookingStatus.CONFIRMED,
+            agreed_budget=150000,
+        )
+        EventVendor.objects.create(
+            project=self.project,
+            vendor=self.vendor2,
+            service_type="PHOTOGRAPHY",
+            status=EventVendor.BookingStatus.SHORTLISTED,
+            agreed_budget=40000,
+        )
+
+        # Filter by category
+        res_cat = self.client.get(f"{self.vendors_url}?category=CATERING")
+        self.assertEqual(res_cat.status_code, status.HTTP_200_OK)
+        self.assertEqual(res_cat.data["count"], 1)
+        self.assertEqual(res_cat.data["results"][0]["vendor_name"], "Delight Catering")
+
+        # Filter by status
+        res_status = self.client.get(f"{self.vendors_url}?status=SHORTLISTED")
+        self.assertEqual(res_status.status_code, status.HTTP_200_OK)
+        self.assertEqual(res_status.data["count"], 1)
+        self.assertEqual(res_status.data["results"][0]["vendor_name"], "Pixel Studio")
+
+        # Search by vendor name
+        res_search = self.client.get(f"{self.vendors_url}?search=Pixel")
+        self.assertEqual(res_search.status_code, status.HTTP_200_OK)
+        self.assertEqual(res_search.data["count"], 1)
+        self.assertEqual(res_search.data["results"][0]["vendor_name"], "Pixel Studio")
+
+    def test_update_and_delete_event_vendor(self) -> None:
+        assignment = EventVendor.objects.create(
+            project=self.project,
+            vendor=self.vendor2,
+            service_type="PHOTOGRAPHY",
+            status=EventVendor.BookingStatus.SHORTLISTED,
+        )
+        detail_url = reverse(
+            "project_vendor_detail",
+            kwargs={"id": self.project.id, "vendor_assignment_id": assignment.id},
+        )
+
+        # Update status and agreed budget
+        patch_res = self.client.patch(
+            detail_url,
+            {"status": "CONFIRMED", "agreed_budget": 55000.00, "notes": "Advance paid"},
+            format="json",
+        )
+        self.assertEqual(patch_res.status_code, status.HTTP_200_OK)
+        self.assertEqual(patch_res.data["status"], "CONFIRMED")
+        self.assertEqual(float(patch_res.data["agreed_budget"]), 55000.0)
+
+        # Delete
+        del_res = self.client.delete(detail_url)
+        self.assertEqual(del_res.status_code, status.HTTP_204_NO_CONTENT)
+        self.assertFalse(EventVendor.objects.filter(id=assignment.id).exists())
+
+    def test_event_vendor_budget_summary(self) -> None:
+        EventVendor.objects.create(
+            project=self.project,
+            vendor=self.vendor1,
+            service_type="CATERING",
+            status=EventVendor.BookingStatus.CONFIRMED,
+            agreed_budget=200000,
+        )
+        EventVendor.objects.create(
+            project=self.project,
+            vendor=self.vendor2,
+            service_type="PHOTOGRAPHY",
+            status=EventVendor.BookingStatus.SHORTLISTED,
+            agreed_budget=60000,
+        )
+
+        summary_url = reverse("project_vendors_budget_summary", kwargs={"id": self.project.id})
+        res = self.client.get(summary_url)
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        self.assertEqual(res.data["total_allocated_budget"], 260000.0)
+        self.assertEqual(res.data["total_vendors_count"], 2)
+        self.assertEqual(res.data["confirmed_vendors_count"], 1)
+        self.assertIn("CATERING", res.data["by_service_type"])
+        self.assertIn("PHOTOGRAPHY", res.data["by_service_type"])
+
+    def test_duplicate_vendor_rejected(self) -> None:
+        self.client.post(self.vendors_url, {"vendor_id": str(self.vendor1.id)}, format="json")
+        res_dup = self.client.post(self.vendors_url, {"vendor_id": str(self.vendor1.id)}, format="json")
+        self.assertEqual(res_dup.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("vendor_id", res_dup.data)
+
 

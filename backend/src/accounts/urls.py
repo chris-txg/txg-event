@@ -12,7 +12,12 @@ from accounts.views import (
     PasswordResetRequestView,
     RegisterView,
     ResendVerificationEmailView,
+    VendorDirectoryListView,
+    VendorInquiryDetailView,
+    VendorInquiryListView,
+    VendorInquiryCreateView,
     VendorProfileDetailView,
+    VendorPublicDetailView,
     VerifyEmailView,
 )
 
@@ -30,6 +35,13 @@ urlpatterns = [
     path("api/auth/password/change/", ChangePasswordView.as_view(), name="auth_password_change"),
     path("api/auth/password/reset/", PasswordResetRequestView.as_view(), name="auth_password_reset"),
     path("api/auth/password/reset/confirm/", PasswordResetConfirmView.as_view(), name="auth_password_reset_confirm"),
+
+    # Vendor Directory & Inquiries
+    path("api/vendors/", VendorDirectoryListView.as_view(), name="vendor_directory"),
+    path("api/vendors/<uuid:id>/", VendorPublicDetailView.as_view(), name="vendor_public_detail"),
+    path("api/vendors/<uuid:id>/inquire/", VendorInquiryCreateView.as_view(), name="vendor_inquire"),
+    path("api/vendors/inquiries/", VendorInquiryListView.as_view(), name="vendor_inquiries_list"),
+    path("api/vendors/inquiries/<uuid:id>/", VendorInquiryDetailView.as_view(), name="vendor_inquiry_detail"),
 
     # Audit & Compliance
     path("api/auth/audit-logs/", AuditLogListView.as_view(), name="auth_audit_logs"),

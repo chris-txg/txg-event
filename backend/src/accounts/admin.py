@@ -4,7 +4,7 @@ from django.contrib.auth import get_user_model
 from django.contrib.auth.admin import UserAdmin as BaseUserAdmin
 from django.http import HttpRequest
 
-from accounts.models import AuditLog, CustomerProfile, VendorProfile
+from accounts.models import AuditLog, CustomerProfile, VendorInquiry, VendorProfile
 
 User = get_user_model()
 
@@ -141,3 +141,19 @@ class AuditLogAdmin(admin.ModelAdmin):
 
     def has_delete_permission(self, request: HttpRequest, obj: Any = None) -> bool:
         return False
+
+
+@admin.register(VendorInquiry)
+class VendorInquiryAdmin(admin.ModelAdmin):
+    list_display = (
+        "sender_name",
+        "vendor",
+        "project",
+        "status",
+        "event_date",
+        "created_at",
+    )
+    list_filter = ("status", "created_at")
+    search_fields = ("sender_name", "sender_email", "sender_phone", "vendor__business_name", "message")
+    readonly_fields = ("id", "created_at", "updated_at")
+

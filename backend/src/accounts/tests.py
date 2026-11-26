@@ -19,9 +19,11 @@ from accounts.models import (
     AuditLog,
     CustomerProfile,
     CustomerType,
+    InquiryStatus,
     RoleChoices,
     UserType,
     VendorCategory,
+    VendorInquiry,
     VendorProfile,
 )
 from accounts.tasks import (
@@ -503,4 +505,140 @@ class AuthTests(APITestCase):
         res2 = self.client.post(self.register_url, payload, format="multipart")
         self.assertEqual(res2.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertIn("avatar", res2.data)
+
+
+class VendorMarketplaceAndInquiryTests(APITestCase):
+    def setUp(self) -> None:
+        self.vendor_user1 = User.objects.create_user(
+            username="grand_feast",
+            email="grandfeast@example.com",
+            password="StrongPassword123!",
+        )
+        self.vendor1 = VendorProfile.objects.create(
+            user=self.vendor_user1,
+            business_name="Grand Feast Caterers",
+            business_category=VendorCategory.CATERING,
+            description="Luxury catering and authentic culinary experiences.",
+            city="Chennai",
+            state="Tamil Nadu",
+            is_verified_vendor=True,
+            years_in_business=7,
+            service_radius_km=100,
+        )
+
+        self.vendor_user2 = User.objects.create_user(
+            username="lens_masters",
+            email="lensmasters@example.com",
+            password="StrongPassword123!",
+        )
+        self.vendor2 = VendorProfile.objects.create(
+            user=self.vendor_user2,
+            business_name="Lens Masters Photography",
+            business_category=VendorCategory.PHOTOGRAPHY,
+            description="Cinematic wedding and corporate event coverage.",
+            city="Bengaluru",
+            state="Karnataka",
+            is_verified_vendor=False,
+            years_in_business=2,
+            service_radius_km=50,
+        )
+
+        self.customer = User.objects.create_user(
+            username="event_host",
+            email="host@example.com",
+            password="StrongPassword123!",
+        )
+        self.directory_url = reverse("vendor_directory")
+
+    def test_vendor_directory_query_filters(self) -> None:
+        # 1. Filter by category
+        res_cat = self.client.get(f"{self.directory_url}?category=CATERING")
+        self.assertEqual(res_cat.status_code, status.HTTP_200_OK)
+        self.assertEqual(res_cat.data["count"], 1)
+        self.assertEqual(res_cat.data["results"][0]["business_name"], "Grand Feast Caterers")
+
+        # 2. Filter by city
+        res_city = self.client.get(f"{self.directory_url}?city=Bengaluru")
+        self.assertEqual(res_city.status_code, status.HTTP_200_OK)
+        self.assertEqual(res_city.data["count"], 1)
+        self.assertEqual(res_cat.data["results"][0]["business_name"], "Grand Feast Caterers")
+
+        # 3. Filter by verified status
+        res_ver = self.client.get(f"{self.directory_url}?is_verified=true")
+        self.assertEqual(res_ver.status_code, status.HTTP_200_OK)
+        self.assertEqual(res_ver.data["count"], 1)
+        self.assertEqual(res_ver.data["results"][0]["is_verified_vendor"], True)
+
+        # 4. Filter by minimum years in business
+        res_years = self.client.get(f"{self.directory_url}?min_years=5")
+        self.assertEqual(res_years.status_code, status.HTTP_200_OK)
+        self.assertEqual(res_years.data["count"], 1)
+        self.assertEqual(res_years.data["results"][0]["business_name"], "Grand Feast Caterers")
+
+        # 5. Search keyword
+        res_search = self.client.get(f"{self.directory_url}?search=Masters")
+        self.assertEqual(res_search.status_code, status.HTTP_200_OK)
+        self.assertEqual(res_search.data["count"], 1)
+        self.assertEqual(res_search.data["results"][0]["business_name"], "Lens Masters Photography")
+
+    def test_vendor_public_detail(self) -> None:
+        detail_url = reverse("vendor_public_detail", kwargs={"id": self.vendor1.id})
+        res = self.client.get(detail_url)
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        self.assertEqual(res.data["business_name"], "Grand Feast Caterers")
+        self.assertEqual(res.data["business_category"], "CATERING")
+
+    def test_vendor_inquiry_flow(self) -> None:
+        inquire_url = reverse("vendor_inquire", kwargs={"id": self.vendor1.id})
+        payload = {
+            "sender_name": "Priya Sharma",
+            "sender_email": "priya@example.com",
+            "sender_phone": "+91 9876543210",
+            "event_date": "2026-12-25",
+            "estimated_guests": 250,
+            "estimated_budget": "200000-300000",
+            "message": "Interested in premium South Indian & Continental menu for reception.",
+        }
+
+        # Anonymous visitor can submit inquiry
+        res = self.client.post(inquire_url, payload, format="json")
+        self.assertEqual(res.status_code, status.HTTP_201_CREATED)
+        inquiry_id = res.data["id"]
+
+        inquiry_obj = VendorInquiry.objects.get(id=inquiry_id)
+        self.assertEqual(inquiry_obj.vendor, self.vendor1)
+        self.assertEqual(inquiry_obj.status, InquiryStatus.NEW)
+        self.assertEqual(inquiry_obj.estimated_guests, 250)
+
+    def test_vendor_inquiry_list_and_update(self) -> None:
+        inquiry = VendorInquiry.objects.create(
+            vendor=self.vendor1,
+            sender=self.customer,
+            sender_name="Priya Sharma",
+            sender_email="priya@example.com",
+            sender_phone="+91 9876543210",
+            message="Looking for wedding catering",
+            status=InquiryStatus.NEW,
+        )
+
+        # Vendor logs in and checks incoming inquiries
+        self.client.force_authenticate(user=self.vendor_user1)
+        list_url = reverse("vendor_inquiries_list")
+        res = self.client.get(list_url)
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        self.assertEqual(res.data["count"], 1)
+        self.assertEqual(res.data["results"][0]["sender_name"], "Priya Sharma")
+
+        # Vendor marks inquiry as RESPONDED
+        detail_url = reverse("vendor_inquiry_detail", kwargs={"id": inquiry.id})
+        patch_res = self.client.patch(
+            detail_url,
+            {"status": "RESPONDED", "vendor_notes": "Sent sample menu PDF via email"},
+            format="json",
+        )
+        self.assertEqual(patch_res.status_code, status.HTTP_200_OK)
+        inquiry.refresh_from_db()
+        self.assertEqual(inquiry.status, InquiryStatus.RESPONDED)
+        self.assertEqual(inquiry.vendor_notes, "Sent sample menu PDF via email")
+
 

@@ -117,3 +117,63 @@ class EventProjectDocument(models.Model):
     def __str__(self) -> str:
         return f"{self.original_filename} ({self.project_id})"
 
+
+class EventVendor(models.Model):
+    class BookingStatus(models.TextChoices):
+        SHORTLISTED = "SHORTLISTED", "Shortlisted"
+        INQUIRY_SENT = "INQUIRY_SENT", "Inquiry Sent"
+        QUOTED = "QUOTED", "Quoted"
+        CONFIRMED = "CONFIRMED", "Confirmed / Hired"
+        DECLINED = "DECLINED", "Declined"
+        COMPLETED = "COMPLETED", "Completed"
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    project = models.ForeignKey(
+        EventProject,
+        on_delete=models.CASCADE,
+        related_name="event_vendors",
+        db_index=True,
+    )
+    vendor = models.ForeignKey(
+        "accounts.VendorProfile",
+        on_delete=models.CASCADE,
+        related_name="event_assignments",
+        db_index=True,
+    )
+    service_type = models.CharField(
+        max_length=50,
+        db_index=True,
+        help_text="Service category (e.g. VENUE, CATERING, PHOTOGRAPHY)",
+    )
+    status = models.CharField(
+        max_length=25,
+        choices=BookingStatus.choices,
+        default=BookingStatus.SHORTLISTED,
+        db_index=True,
+    )
+    agreed_budget = models.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        help_text="Agreed budget or quote for this vendor in INR",
+    )
+    notes = models.TextField(blank=True, default="")
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = "Event Vendor"
+        verbose_name_plural = "Event Vendors"
+        ordering = ["-created_at"]
+        unique_together = ("project", "vendor")
+        indexes = [
+            models.Index(fields=["project", "service_type"]),
+            models.Index(fields=["project", "status"]),
+            models.Index(fields=["vendor", "status"]),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.project.project_name} - {self.vendor.business_name} ({self.service_type}: {self.status})"
+
+

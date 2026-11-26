@@ -266,3 +266,67 @@ class AuditLog(models.Model):
     def __str__(self) -> str:
         actor_name = self.actor.username if self.actor else "Anonymous"
         return f"[{self.timestamp}] {actor_name} - {self.action}"
+
+
+class InquiryStatus(models.TextChoices):
+    NEW = "NEW", "New"
+    VIEWED = "VIEWED", "Viewed"
+    RESPONDED = "RESPONDED", "Responded"
+    DECLINED = "DECLINED", "Declined"
+    CLOSED = "CLOSED", "Closed"
+
+
+class VendorInquiry(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    vendor = models.ForeignKey(
+        VendorProfile,
+        on_delete=models.CASCADE,
+        related_name="inquiries",
+        db_index=True,
+    )
+    sender = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="sent_vendor_inquiries",
+        db_index=True,
+    )
+    project = models.ForeignKey(
+        "projects.EventProject",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="vendor_inquiries",
+        db_index=True,
+    )
+    sender_name = models.CharField(max_length=150)
+    sender_email = models.EmailField()
+    sender_phone = models.CharField(max_length=30)
+    event_date = models.DateField(null=True, blank=True)
+    estimated_guests = models.PositiveIntegerField(null=True, blank=True)
+    estimated_budget = models.CharField(max_length=100, blank=True, default="")
+    message = models.TextField()
+    status = models.CharField(
+        max_length=20,
+        choices=InquiryStatus.choices,
+        default=InquiryStatus.NEW,
+        db_index=True,
+    )
+    vendor_notes = models.TextField(blank=True, default="")
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = "Vendor Inquiry"
+        verbose_name_plural = "Vendor Inquiries"
+        ordering = ["-created_at"]
+        indexes = [
+            models.Index(fields=["vendor", "status", "-created_at"]),
+            models.Index(fields=["sender", "-created_at"]),
+            models.Index(fields=["project", "-created_at"]),
+        ]
+
+    def __str__(self) -> str:
+        return f"Inquiry from {self.sender_name} to {self.vendor.business_name} ({self.status})"
+

@@ -196,3 +196,79 @@ def process_user_avatar_to_webp(self: Any, user_id: str) -> bool:
         raise self.retry(exc=exc, countdown=countdown)
 
 
+@shared_task(
+    bind=True,
+    max_retries=3,
+    default_retry_delay=60,
+    rate_limit="100/m",
+    time_limit=300,
+    soft_time_limit=240,
+)
+def send_vendor_inquiry_notification(self: Any, inquiry_id: str) -> bool:
+    """
+    Asynchronously notifies a vendor when a new customer inquiry/quote request is received.
+    """
+    from accounts.models import VendorInquiry
+
+    try:
+        inquiry = (
+            VendorInquiry.objects.select_related("vendor__user", "project")
+            .only(
+                "id",
+                "sender_name",
+                "sender_email",
+                "sender_phone",
+                "event_date",
+                "estimated_guests",
+                "estimated_budget",
+                "message",
+                "vendor__business_name",
+                "vendor__user__email",
+                "project__project_name",
+            )
+            .get(id=inquiry_id)
+        )
+    except VendorInquiry.DoesNotExist:
+        logger.warning("Inquiry notification aborted: inquiry %s does not exist.", inquiry_id)
+        return False
+
+    vendor_user = inquiry.vendor.user
+    if not vendor_user or not vendor_user.email:
+        logger.warning("Vendor %s has no user email for inquiry notification.", inquiry.vendor_id)
+        return False
+
+    try:
+        from_email = getattr(settings, "DEFAULT_FROM_EMAIL", "noreply@eventplatform.com")
+        subject = f"New Inquiry Received: {inquiry.sender_name} for {inquiry.vendor.business_name}"
+        project_title = inquiry.project.project_name if inquiry.project else "Direct Inquiry"
+
+        body = (
+            f"Hello {inquiry.vendor.business_name},\n\n"
+            f"You have received a new event service inquiry!\n\n"
+            f"Client Name: {inquiry.sender_name}\n"
+            f"Email: {inquiry.sender_email}\n"
+            f"Phone: {inquiry.sender_phone}\n"
+            f"Event Date: {inquiry.event_date or 'Not specified'}\n"
+            f"Estimated Guests: {inquiry.estimated_guests or 'Not specified'}\n"
+            f"Budget Range: {inquiry.estimated_budget or 'Not specified'}\n"
+            f"Event Project: {project_title}\n\n"
+            f"Message from Client:\n{inquiry.message}\n\n"
+            f"Log in to your vendor dashboard to review and respond.\n"
+        )
+
+        msg = EmailMultiAlternatives(
+            subject=subject,
+            body=body,
+            from_email=from_email,
+            to=[vendor_user.email],
+        )
+        msg.send()
+        logger.info("Successfully sent inquiry notification for inquiry %s to %s", inquiry_id, vendor_user.email)
+        return True
+    except Exception as exc:
+        logger.exception("Failed to send vendor inquiry email for inquiry %s: %s", inquiry_id, exc)
+        countdown = 2 ** self.request.retries * 30
+        raise self.retry(exc=exc, countdown=countdown)
+
+
+

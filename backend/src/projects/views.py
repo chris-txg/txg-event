@@ -9,12 +9,15 @@ from rest_framework.request import Request
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from projects.models import EventProject, EventProjectDocument
+from projects.models import EventProject, EventProjectDocument, EventVendor
 from projects.permissions import IsProjectOwnerOrStaff
 from projects.serializers import (
     EventProjectCreateUpdateSerializer,
     EventProjectDetailSerializer,
     EventProjectListSerializer,
+    EventVendorCreateSerializer,
+    EventVendorListSerializer,
+    EventVendorUpdateSerializer,
 )
 from survey.models import Survey
 from survey.serializers import SurveyListSerializer
@@ -187,4 +190,136 @@ class EventProjectSurveysListView(generics.ListAPIView):
     @extend_schema(tags=["Projects"], summary="List surveys linked to an event project")
     def get(self, request: Request, *args: Any, **kwargs: Any) -> Response:
         return super().get(request, *args, **kwargs)
+
+
+class EventVendorListCreateView(generics.ListCreateAPIView):
+    """
+    List vendors associated with an event project or attach a new vendor.
+    Query parameters:
+    - ?category=CATERING (or ?service_type=CATERING)
+    - ?status=SHORTLISTED / CONFIRMED / QUOTED / etc.
+    - ?search=delight (searches vendor business name)
+    """
+    permission_classes = [permissions.IsAuthenticated, IsProjectOwnerOrStaff]
+
+    def get_project(self) -> EventProject:
+        project = get_object_or_404(EventProject, id=self.kwargs["id"])
+        self.check_object_permissions(self.request, project)
+        return project
+
+    def get_serializer_class(self) -> Any:
+        if self.request.method == "POST":
+            return EventVendorCreateSerializer
+        return EventVendorListSerializer
+
+    def get_serializer_context(self) -> dict[str, Any]:
+        context = super().get_serializer_context()
+        context["project"] = self.get_project()
+        return context
+
+    @extend_schema(
+        tags=["Event Vendors"],
+        summary="List vendors associated with an event project",
+        parameters=[
+            OpenApiParameter("category", str, description="Filter by service category (e.g. CATERING, VENUE, PHOTOGRAPHY)"),
+            OpenApiParameter("service_type", str, description="Alternative alias for category"),
+            OpenApiParameter("status", str, description="Filter by status (SHORTLISTED, INQUIRY_SENT, QUOTED, CONFIRMED, DECLINED, COMPLETED)"),
+            OpenApiParameter("search", str, description="Search by vendor business name"),
+        ],
+    )
+    def get_queryset(self) -> Any:
+        project = self.get_project()
+        qs = EventVendor.objects.filter(project=project).select_related("vendor__user")
+
+        category = self.request.query_params.get("category") or self.request.query_params.get("service_type")
+        if category:
+            qs = qs.filter(service_type__iexact=category.strip())
+
+        status_param = self.request.query_params.get("status")
+        if status_param:
+            qs = qs.filter(status=status_param.upper().strip())
+
+        search = self.request.query_params.get("search", "").strip()
+        if search:
+            qs = qs.filter(vendor__business_name__icontains=search)
+
+        return qs.order_by("-created_at")
+
+
+class EventVendorDetailView(generics.RetrieveUpdateDestroyAPIView):
+    """
+    Retrieve, update (status, agreed_budget, notes), or remove a vendor from an event project.
+    """
+    permission_classes = [permissions.IsAuthenticated, IsProjectOwnerOrStaff]
+    lookup_field = "id"
+    lookup_url_kwarg = "vendor_assignment_id"
+
+    def get_project(self) -> EventProject:
+        project = get_object_or_404(EventProject, id=self.kwargs["id"])
+        self.check_object_permissions(self.request, project)
+        return project
+
+    def get_serializer_class(self) -> Any:
+        if self.request.method in ["PATCH", "PUT"]:
+            return EventVendorUpdateSerializer
+        return EventVendorListSerializer
+
+    def get_queryset(self) -> Any:
+        project = self.get_project()
+        return EventVendor.objects.filter(project=project).select_related("vendor__user")
+
+
+class EventVendorBudgetSummaryView(APIView):
+    """
+    Returns budget allocation summary across all vendors for this event project.
+    """
+    permission_classes = [permissions.IsAuthenticated, IsProjectOwnerOrStaff]
+
+    @extend_schema(
+        tags=["Event Vendors"],
+        summary="Get vendor budget allocation summary for an event",
+    )
+    def get(self, request: Request, id: Any) -> Response:
+        project = get_object_or_404(EventProject, id=id)
+        self.check_object_permissions(request, project)
+
+        assignments = list(
+            EventVendor.objects.filter(project=project)
+        )
+
+        total_allocated = sum(
+            (item.agreed_budget for item in assignments if item.agreed_budget is not None),
+            0,
+        )
+        total_vendors = len(assignments)
+        confirmed_vendors = sum(1 for item in assignments if item.status == EventVendor.BookingStatus.CONFIRMED)
+
+        by_service_type: dict[str, dict[str, Any]] = {}
+        for item in assignments:
+            stype = item.service_type
+            if stype not in by_service_type:
+                by_service_type[stype] = {
+                    "count": 0,
+                    "confirmed_count": 0,
+                    "allocated_budget": 0.0,
+                }
+            by_service_type[stype]["count"] += 1
+            if item.status == EventVendor.BookingStatus.CONFIRMED:
+                by_service_type[stype]["confirmed_count"] += 1
+            if item.agreed_budget is not None:
+                by_service_type[stype]["allocated_budget"] += float(item.agreed_budget)
+
+        return Response(
+            {
+                "project_id": str(project.id),
+                "project_name": project.project_name,
+                "estimated_budget_range": project.estimated_budget_range,
+                "total_allocated_budget": float(total_allocated),
+                "total_vendors_count": total_vendors,
+                "confirmed_vendors_count": confirmed_vendors,
+                "by_service_type": by_service_type,
+            },
+            status=status.HTTP_200_OK,
+        )
+
 

@@ -13,5 +13,9 @@ class IsProjectOwnerOrStaff(permissions.BasePermission):
             return False
         if request.user.is_staff or getattr(request.user, "role", None) in ["ADMIN", "SUPERADMIN"]:
             return True
-        return obj.owner_id == request.user.id
+        if hasattr(obj, "owner_id"):
+            return obj.owner_id == request.user.id
+        if hasattr(obj, "project"):
+            return obj.project.owner_id == request.user.id
+        return False
 

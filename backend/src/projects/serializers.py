@@ -4,7 +4,8 @@ from typing import Any
 from django.db import transaction
 from rest_framework import serializers
 
-from projects.models import EventProject, EventProjectDocument
+from accounts.models import VendorProfile
+from projects.models import EventProject, EventProjectDocument, EventVendor
 
 MAX_DOCUMENT_SIZE_BYTES = 10 * 1024 * 1024  # 10 MB
 BLOCKED_DOCUMENT_EXTENSIONS = {
@@ -252,3 +253,99 @@ class EventProjectCreateUpdateSerializer(serializers.ModelSerializer):
             project = super().update(instance, validated_data)
             self._save_documents(project, documents)
         return project
+
+
+class EventVendorListSerializer(serializers.ModelSerializer):
+    vendor_id = serializers.UUIDField(source="vendor.id", read_only=True)
+    vendor_name = serializers.CharField(source="vendor.business_name", read_only=True)
+    vendor_category = serializers.CharField(source="vendor.business_category", read_only=True)
+    vendor_city = serializers.CharField(source="vendor.city", read_only=True)
+    is_verified_vendor = serializers.BooleanField(source="vendor.is_verified_vendor", read_only=True)
+    vendor_phone = serializers.CharField(source="vendor.user.phone_number", read_only=True, default="")
+    vendor_email = serializers.EmailField(source="vendor.user.email", read_only=True, default="")
+    status_display = serializers.CharField(source="get_status_display", read_only=True)
+
+    class Meta:
+        model = EventVendor
+        fields = [
+            "id",
+            "project_id",
+            "vendor_id",
+            "vendor_name",
+            "vendor_category",
+            "vendor_city",
+            "is_verified_vendor",
+            "vendor_phone",
+            "vendor_email",
+            "service_type",
+            "status",
+            "status_display",
+            "agreed_budget",
+            "notes",
+            "created_at",
+            "updated_at",
+        ]
+        read_only_fields = fields
+
+
+class EventVendorCreateSerializer(serializers.ModelSerializer):
+    vendor_id = serializers.UUIDField(required=True, write_only=True)
+    service_type = serializers.CharField(required=False, allow_blank=True, default="")
+    vendor_name = serializers.CharField(source="vendor.business_name", read_only=True)
+    vendor_category = serializers.CharField(source="vendor.business_category", read_only=True)
+
+    class Meta:
+        model = EventVendor
+        fields = [
+            "id",
+            "vendor_id",
+            "vendor_name",
+            "vendor_category",
+            "service_type",
+            "status",
+            "agreed_budget",
+            "notes",
+            "created_at",
+        ]
+        read_only_fields = ["id", "vendor_name", "vendor_category", "created_at"]
+
+    def validate_vendor_id(self, value: Any) -> Any:
+        if not VendorProfile.objects.filter(id=value).exists():
+            raise serializers.ValidationError("VendorProfile with the specified ID does not exist.")
+        return value
+
+    def validate(self, attrs: dict[str, Any]) -> dict[str, Any]:
+        vendor_id = attrs["vendor_id"]
+        project = self.context["project"]
+        if EventVendor.objects.filter(project=project, vendor_id=vendor_id).exists():
+            raise serializers.ValidationError(
+                {"vendor_id": "This vendor is already added to this event project."}
+            )
+        if not attrs.get("service_type"):
+            vendor = VendorProfile.objects.only("business_category").get(id=vendor_id)
+            attrs["service_type"] = vendor.business_category
+        return attrs
+
+    def create(self, validated_data: dict[str, Any]) -> EventVendor:
+        vendor_id = validated_data.pop("vendor_id")
+        project = self.context["project"]
+        return EventVendor.objects.create(
+            project=project,
+            vendor_id=vendor_id,
+            **validated_data,
+        )
+
+
+class EventVendorUpdateSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = EventVendor
+        fields = ["service_type", "status", "agreed_budget", "notes"]
+
+
+class EventVendorBudgetSummarySerializer(serializers.Serializer):
+    total_allocated_budget = serializers.DecimalField(max_digits=14, decimal_places=2)
+    total_vendors_count = serializers.IntegerField()
+    confirmed_vendors_count = serializers.IntegerField()
+    estimated_budget_range = serializers.CharField()
+    by_service_type = serializers.DictField()
+

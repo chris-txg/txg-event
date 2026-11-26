@@ -11,9 +11,11 @@ from accounts.models import (
     AuditLog,
     CustomerProfile,
     CustomerType,
+    InquiryStatus,
     RoleChoices,
     UserType,
     VendorCategory,
+    VendorInquiry,
     VendorProfile,
 )
 from accounts.services import AuthService
@@ -372,3 +374,103 @@ class AuditLogSerializer(serializers.ModelSerializer):
             "timestamp",
         ]
         read_only_fields = fields
+
+
+class VendorDirectorySerializer(serializers.ModelSerializer):
+    """Public serializer for listing and exploring vendors in the directory."""
+    avatar = serializers.ImageField(source="user.avatar", read_only=True)
+    category_display = serializers.CharField(source="get_business_category_display", read_only=True)
+
+    class Meta:
+        model = VendorProfile
+        fields = [
+            "id",
+            "business_name",
+            "business_category",
+            "category_display",
+            "description",
+            "city",
+            "state",
+            "country",
+            "website",
+            "is_verified_vendor",
+            "years_in_business",
+            "service_radius_km",
+            "avatar",
+            "created_at",
+        ]
+        read_only_fields = fields
+
+
+class VendorInquiryCreateSerializer(serializers.ModelSerializer):
+    project_id = serializers.UUIDField(required=False, allow_null=True)
+
+    class Meta:
+        model = VendorInquiry
+        fields = [
+            "id",
+            "project_id",
+            "sender_name",
+            "sender_email",
+            "sender_phone",
+            "event_date",
+            "estimated_guests",
+            "estimated_budget",
+            "message",
+        ]
+
+    def validate_sender_email(self, value: str) -> str:
+        return value.lower().strip()
+
+    def validate_sender_phone(self, value: str) -> str:
+        cleaned = value.strip()
+        if len(cleaned) < 7 or len(cleaned) > 20:
+            raise serializers.ValidationError("Phone number must be between 7 and 20 characters.")
+        return cleaned
+
+
+class VendorInquirySerializer(serializers.ModelSerializer):
+    vendor_business_name = serializers.CharField(source="vendor.business_name", read_only=True)
+    vendor_category = serializers.CharField(source="vendor.business_category", read_only=True)
+    project_name = serializers.CharField(source="project.project_name", read_only=True, default=None)
+    status_display = serializers.CharField(source="get_status_display", read_only=True)
+
+    class Meta:
+        model = VendorInquiry
+        fields = [
+            "id",
+            "vendor_id",
+            "vendor_business_name",
+            "vendor_category",
+            "project_id",
+            "project_name",
+            "sender_name",
+            "sender_email",
+            "sender_phone",
+            "event_date",
+            "estimated_guests",
+            "estimated_budget",
+            "message",
+            "status",
+            "status_display",
+            "vendor_notes",
+            "created_at",
+            "updated_at",
+        ]
+        read_only_fields = [
+            "id",
+            "vendor_id",
+            "vendor_business_name",
+            "vendor_category",
+            "project_id",
+            "project_name",
+            "created_at",
+            "updated_at",
+        ]
+
+
+class VendorInquiryUpdateSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = VendorInquiry
+        fields = ["status", "vendor_notes"]
+
