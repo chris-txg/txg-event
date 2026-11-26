@@ -36,7 +36,7 @@ export async function POST(
 
     const { searchParams } = new URL(request.url);
     const dryRun = searchParams.get('dry_run');
-    const queryString = dryRun ? `?dry_run=${dryRun}` : '';
+    const queryString = dryRun ? `dry_run=${encodeURIComponent(dryRun)}` : '';
 
     const djangoUrl = `${DJANGO_BASE_URL}${DJANGO_ENDPOINTS.SURVEYS.QUESTIONS_BULK_UPLOAD(cleanId, queryString)}`;
     const formData = await request.formData();
